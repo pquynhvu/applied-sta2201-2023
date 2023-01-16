@@ -1,8 +1,7 @@
 ---
 title: "Lab 1"
 author: "Quynh Vu"
-date: today
-date-format: "15/01/2023"
+date: "15/01/2023"
 format: 
     pdf:
       toc: true
@@ -12,7 +11,7 @@ format:
 library(tidyverse)
 ```
 
-```{r}
+```{r echo=TRUE}
 url1 <- "https://www.prdh.umontreal.ca/BDLC/data/ont/Mx_1x1.txt"
 dd <- read.table(url1, header = TRUE, skip = 2)
 dd$Female <- as.double(dd$Female)
@@ -23,15 +22,10 @@ dd$Total <- as.double(dd$Total)
 
 # 1. Plot the ratio of male to female mortality rates over time for ages 10,20,30 and 40 (different color for each age) and change the theme
 
-```{r}
+```{r echo=TRUE}
 dd_Age <- dd |> 
              filter(Age == 10|Age == 20|Age == 30|Age == 40)|>
              mutate(mf_ratio = Male/Female)
-head(dd_Age)
-tail(dd_Age)
-```
-
-```{r}
 dd_Age |> 
        ggplot(aes(x = Year, y = mf_ratio, color = Age)) + 
        geom_line() + 
@@ -48,8 +42,7 @@ dd_Age |>
 dd_HighestF <- dd |> 
                   select(Year:Female) |> 
                   merge(aggregate(Female~Year, dd, max, na.rm=TRUE))
-head(dd_HighestF)
-tail(dd_HighestF)
+dd_HighestF
 ```
 
 # 3. Use the `summarize(across())` syntax to calculate the standard deviation of mortality rates by age for the Male, Female and Total populations.
@@ -57,9 +50,8 @@ tail(dd_HighestF)
 ```{r}
 dd_SD <- dd |> 
             group_by(Age) |> 
-            summarize(across(Female:Total, sd))
-head(dd_SD)
-tail(dd_SD)
+            summarize(across(Female:Total, sd, na.rm = TRUE))
+dd_SD
 ```
 
 # 4. The Canadian HMD also provides population sizes over time (https://www.prdh.umontreal.ca/BDLC/data/ont/Population.txt). Use these to calculate the population weighted average mortality rate separately for males and females, for every year. Make a nice line plot showing the result (with meaningful labels/titles) and briefly comment on what you see (1 sentence). Hint: `left_join` will probably be useful here.
@@ -67,10 +59,7 @@ tail(dd_SD)
 ```{r}
 url2 <- "https://www.prdh.umontreal.ca/BDLC/data/ont/Population.txt"
 dp <- read.table(url2, header = TRUE, skip = 2)
-head(dp)
 ```
-
-**The population weighted average mortality rate for males:**
 
 ```{r}
 dp_Male <- dp |>
@@ -84,8 +73,6 @@ Male_weightedmean <- dp_Male |>
                              group_by(Year) |> 
                              summarise(weighted.mean(M_mortality, MWeight))
 ```
-
-**The population weighted average mortality rate for females:**
 
 ```{r}
 dp_Female <- dp |>
@@ -110,7 +97,8 @@ The weighted average mortality rate across 111 age groups of males was consisten
 
 ```{r}
 weightedMean_long <- weightedMean |> 
-  					                       pivot_longer(Female:Male, names_to = "sex", values_to = "WeightedMean")
+  					                       pivot_longer(Female:Male, names_to = "sex", 
+  					                                    values_to = "WeightedMean")
 
 weightedMean_long |> 
                   ggplot(aes(x = Year, y = WeightedMean, color = sex)) + 
