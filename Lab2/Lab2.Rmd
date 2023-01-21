@@ -32,31 +32,168 @@ library(ggrepel)
 
 **To be handed in via submission of quarto file (and rendered pdf) to GitHub.**
 
+**Cleaning:**
+
+```{r echo=TRUE}
+res <- list_package_resources("996cfe8d-fb35-40ce-b569-698d51fc683b") 
+res <- res |> mutate(year = str_extract(name, "202.?"))
+delay_2022_ids <- res |> filter(year==2022)|> select(id) |> 
+                         pull() # Extract a single column
+delay_2022 <- get_resource(delay_2022_ids)
+delay_2022 <- clean_names(delay_2022) 
+delay_codes <- get_resource("3900e649-f31e-4b79-9f20-4731bbfd94f7")
+delay_data_codebook <- get_resource("ca43ac3d-3940-4315-889b-a9375e7b8aa4")
+delay_2022 <- delay_2022 |> distinct() # subset distinct/unique rows
+```
+
+```{r echo=TRUE}
+delay_2022$line <- as.factor(delay_2022$line)
+delay_2022 <- delay_2022 |> filter(line %in% c("BD", "YU", "SHP", "SRT"))
+# 
+delay_2022 <- delay_2022 |> mutate(station = ifelse(str_starts(station, "ST"), 
+                                   word(station, 1,2), word(station, 1)))
+delay_2022$station <- as.factor(delay_2022$station)
+levels(delay_2022$station)[levels(delay_2022$station) == "ST ANDREW"]  <- "ST.ANDREW"
+levels(delay_2022$station)[levels(delay_2022$station) == "ST PATRICK"]  <- "ST.PATRICK"
+levels(delay_2022$station)[levels(delay_2022$station) == "ST CLAIR"]  <- "ST.CLAIR"
+levels(delay_2022$station)[levels(delay_2022$station) == "ST. GEORGE"]  <- "ST.GEORGE"
+levels(delay_2022$station)[levels(delay_2022$station) == "ST GEORGE"]  <- "ST.GEORGE"
+levels(delay_2022$station)[levels(delay_2022$station) == "YONGE/SHEPPARD"]  <- "SHEPPARD-YONGE"
+levels(delay_2022$station)[levels(delay_2022$station) == "YONGE-SHEPPARD"]  <- "SHEPPARD-YONGE"
+levels(delay_2022$station)[levels(delay_2022$station) == "BLOOR/DANFORTH"]  <- "BLOOR-DANFORTH"
+levels(delay_2022$station)[levels(delay_2022$station) == "YONGE/UNIVERSITY"]  <- "YONGE-UNIVERSITY"
+levels(delay_2022$station)[levels(delay_2022$station) == "DOWNVIEW"]  <- "DOWNSVIEW"
+levels(delay_2022$station)[levels(delay_2022$station) == "QUEEN'S"]  <- "QUEENS"
+levels(delay_2022$station)[levels(delay_2022$station) == "GLENCARIN"]  <- "GLENCAIRN"
+levels(delay_2022$station)[levels(delay_2022$station) == "LAWRECNE"]  <- "LAWRENCE"
+levels(delay_2022$station)[levels(delay_2022$station) == "SUMMER"]  <- "SUMMERHILL"
+```
+
 # 1. Using the `delay_2022` data, plot the five stations with the highest mean delays. Facet the graph by `line`
+
+
+```{r echo=TRUE}
+delay_2022 <- delay_2022 |> 
+                         group_by(station) |> 
+                         mutate(avgDelay = mean(min_delay))
+top_five_delays <- delay_2022 |> select(station, avgDelay, line)|>
+                                 arrange(desc(avgDelay))|>
+                                 distinct(avgDelay)
+```
+
+The five stations with the highest mean delays are
+
+```{r echo=TRUE}
+head(top_five_delays, 5)
+```
+
+```{r echo=TRUE}
+top5 <- c("GUNN", "VIADUCT", "VMC", "SRT", "BLOOR-DANFORTH")
+top5_data <- delay_2022 |> filter(station %in% top5)
+```
+
+```{r echo=TRUE}
+ggplot(data = top5_data) + 
+       geom_density(aes(x = min_delay, color = station), bw = .08) + 
+       labs(title = "Density of top five stations with the highest mean delays")+
+       facet_wrap(~line)
+```
 
 # 2. Using the `opendatatoronto` package, download the data on mayoral campaign contributions for 2014. Hints:
 
-    + find the ID code you need for the package you need by searching for 'campaign' in the `all_data` tibble above
+  * find the ID code you need for the package you need by searching for 'campaign' in the `all_data` tibble above
     
-    + you will then need to `list_package_resources` to get ID for the data file
+  * you will then need to `list_package_resources` to get ID for the data file
     
-    + note: the 2014 file you will get from `get_resource` has a bunch of different campaign contributions, so just keep the data that relates to the Mayor election
+**Note**: the 2014 file you will get from `get_resource` has a bunch of different campaign contributions, so just keep the data that relates to the Mayor election
+
+```{r echo=TRUE}
+contribution <- list_package_resources("f6651a40-2f52-46fc-9e04-b760c16edd5c") 
+campaign <- get_resource("5b230e92-0a22-4a15-9572-0b19cc222985") 
+mayor2014 <- campaign[["2_Mayor_Contributions_2014_election.xls"]]
+```
 
 # 3. Clean up the data format (fixing the parsing issue and standardizing the column names using `janitor`)
 
+```{r echo=TRUE}
+not_all_na <- function(x) any(!is.na(x))
+```
+
+```{r echo=TRUE}
+names(mayor2014) <- as.matrix(mayor2014[1, ])
+mayor2014 <- mayor2014[-1, ]  # make the first row the header
+mayor2014 <- mayor2014 |> select_if(not_all_na) |> # remove columns with all NAs
+                          clean_names() |>
+                          rename(contributor = contributors_name, 
+                                 contributor_type = contributor_type_desc,
+                                 relationship = relationship_to_candidate,
+                                 representative = authorized_representative,
+                                 contribution_type = contribution_type_desc,
+                                 manager = president_business_manager, 
+                                 services = goods_or_service_desc)
+names(mayor2014)[1:5][-1] = str_sub(names(mayor2014)[-1], 14)
+head(mayor2014)
+```
+
 # 4. Summarize the variables in the dataset. Are there missing values, and if so, should we be worried about them? Is every variable in the format it should be? If not, create new variable(s) that are in the right format.
+
+There are a lot NAs in variables address, services, relationship, manager, and representative.
+
+```{r echo=TRUE}
+mayor2014 |> summarize(across(everything(), ~ sum(is.na(.x)))) 
+```
+
+```{r echo=TRUE}
+mayor_2014 <- data.frame(matrix(nrow = nrow(mayor2014), ncol = 1)) # create new data frame
+mayor_2014$contributor <- mayor2014$contributor          
+mayor_2014$address <- mayor2014$address         
+mayor_2014$postal_code <- mayor2014$postal_code
+mayor_2014$amount <- as.numeric(mayor2014$amount)
+mayor_2014$type <- as.factor(mayor2014$type)
+mayor_2014$services <- mayor2014$services
+mayor_2014$contributor_type <- as.factor(mayor2014$contributor_type)
+mayor_2014$relationship <- mayor2014$relationship
+mayor_2014$manager <- mayor2014$manager
+mayor_2014$representative  <- mayor2014$representative
+mayor_2014$candidate  <- as.factor(mayor2014$candidate)
+mayor_2014$office  <- mayor2014$office
+mayor_2014 <- mayor_2014[ -c(1)]
+str(mayor_2014)
+```
 
 # 5. Visually explore the distribution of values of the contributions. What contributions are notable outliers? Do they share a similar characteristic(s)? It may be useful to plot the distribution of contributions without these outliers to get a better sense of the majority of the data. 
 
+```{r echo=TRUE}
+summary(mayor_2014$amount)
+# remove contributions with a value higher than the min value of the potential outliers
+mayor_2014_new <- mayor_2014 |> filter(amount < min(boxplot.stats(mayor_2014$amount)$out))
+out_ind <- which(mayor_2014$amount %in% boxplot.stats(mayor_2014$amount)$out)
+head(out_ind)
+```
+
+```{r echo=TRUE}
+ggp1 <- ggplot(mayor_2014_new, aes(x=amount, color = type)) + 
+        geom_histogram(aes(y=..density..), colour="black", fill="lightblue")+
+        geom_density(alpha=.2, fill="#FF6666") +
+        labs(title = "Distribution of contribution values by type",
+             subtitle = "without outliers")+
+        theme(legend.position="top")
+ggp2 <- ggplot(mayor_2014_new, aes(y=amount)) +
+        labs(title = "Distribution of contribution values without outliers") +
+        geom_boxplot()
+require(gridExtra)
+grid.arrange(ggp2, ggp1, ncol = 2)
+```
+
 # 6. List the top five candidates in each of these categories:
 
-    + total contributions
+  * total contributions
     
-    + mean contribution
+  * mean contribution
     
-    + number of contributions
+  * number of contributions
 
-# 7. Repeat 5 but without contributions from the candidates themselves.
+# 7. Repeat 6 but without contributions from the candidates themselves.
 
 # 8. How many contributors gave money to more than one candidate? 
 
