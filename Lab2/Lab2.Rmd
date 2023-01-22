@@ -86,9 +86,20 @@ top5 |> mutate(week = week(date)) |> # Get/set weeks component of a date-time
         ggplot(aes(week, min_delay, color = station)) + 
                geom_point() + 
                geom_smooth() + 
-               labs(title = "Distribution of the top 5 stations that have the highest delay time",
-                    subtitle = "on average") +
+               labs(title = "Distribution of 5 stations that have the highest delay time on average over time") +
                facet_grid(~line)
+top5 |> group_by(station) |> 
+        ggplot(aes(station, color = station)) +
+               geom_bar() +
+               labs(title = "Number of delays of 5 stations that have the highest delay time on average") +
+                facet_grid(~line)
+
+top5 |> group_by(station) |> 
+        mutate(totalDelay = sum(min_delay)) |>
+        ggplot(aes(y = totalDelay, x = station)) +
+        geom_point() +
+        labs(title = "Total amount of delay time of 5 stations that have the highest delay time on average") +
+        facet_grid(~line)
 ```
 
 # 2. Using the `opendatatoronto` package, download the data on mayoral campaign contributions for 2014. Hints:
@@ -297,8 +308,7 @@ head(byNumber2, 5)
 
 ```{r echo=TRUE}
 mayor_2014_new3 <- aggregate(mayor_2014_new2$contributor, 
-                             by=list(mayor_2014_new2$contributor, 
-                                     mayor_2014_new2$candidate), 
+                             by=list(mayor_2014_new2$contributor, mayor_2014_new2$candidate), 
                              FUN=length) 
 colnames(mayor_2014_new3) <- c("contributor", "candidate", "x") 
 dm <- as.data.frame(table(mayor_2014_new3$contributor))|> filter(Freq > 1)
