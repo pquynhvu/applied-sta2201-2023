@@ -71,6 +71,8 @@ The 95% credible interval for $\hat{\theta}$ under $Beta(1, 1)$ is $E(\theta|\te
 
 # Question 3: Now assume a Beta(10,10) prior on $\theta$. What is the interpretation of this prior? Are we assuming we know more, less or the same amount of information as the prior used in Question 2?
 
+From Question 2), we know that $\theta|\textbf{y} \sim Beta(128, 21)$ under $Beta(10, 10)$ prior.
+
 Similar to $Beta(1, 1)$ prior, $Beta(10, 10)$ prior assigns equal weights to the success and failure of the Bernouli random variables $Y_i$'s. As seen above, the Bayesian point estimate of $\theta$, $\hat{\theta}_B = E(\theta|\textbf{y})$, is a weighted average of the MLE $\hat{\theta}_{mle} = \overline{Y}$ of $\theta$ and the prior mean $E(\theta)$ with the respective weights $w_{mle} = \frac{129}{129 + \alpha + \beta}$ and $w_{\theta} = \frac{\alpha + \beta}{129 + \alpha + \beta}$. 
 
 Since $\hat{\theta}_{mle}$ is a consistent estimator of $\theta$ by the Weak Law of Large Number (i.e. $\hat{\theta}_{mle} \xrightarrow[]{P} \theta$), the Bayes estimate $\hat{\theta}_B$ will be closer to the MLE of $\theta$ for larger n. From $(*)$ we see that the sum $\alpha + \beta$ indicates the worth of the prior information relative to a sample of size $n = 129$. In particular, even though the prior mean $E(\theta) = \frac{1}{2}$ for both $Beta(1, 1)$ and $Beta(10, 10)$, the latter assigns a bigger weight to the prior opinion.
