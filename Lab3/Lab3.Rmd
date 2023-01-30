@@ -35,15 +35,11 @@ The log-likelihood function is
 
 |       $l(\textbf{y}; \theta) = \sum_{i = 1}^{129} log\binom{129}{y_i} + \big(\sum_{i = 1}^{129} y_i\big) log(\theta) + \big(129 - \sum_{i = 1}^{129} y_i\big)log(1 - \theta)$
 
-Taking derivative of $l(\textbf{y}; \theta)$ with respect to $\theta$ yields
-
-|       $\frac{dl(\textbf{y}; \theta)}{d\theta} = \frac{\sum_{i = 1}^{129} y_i}{\theta} - \frac{129 - \sum_{i = 1}^{129} y_i}{1 - \theta}$
+Taking derivative of $l(\textbf{y}; \theta)$ with respect to $\theta$ yields $\frac{dl(\textbf{y}; \theta)}{d\theta} = \frac{\sum_{i = 1}^{129} y_i}{\theta} - \frac{129 - \sum_{i = 1}^{129} y_i}{1 - \theta}$
 
 Setting $\frac{dl(\textbf{y}; \theta)}{d\theta} = 0$ yields $$\hat{\theta}_{mle} = \overline{Y} = \frac{\sum_{i = 1}^{129} y_i}{129} = \frac{118}{129} \approx 0.915$$
 
-Since $\hat{\theta}_{mle} = \overline{Y}$, the Central Limit Theorem gives $\frac{\hat{\theta}_{mle} - 129\theta}{\sqrt{\frac{\theta(1 - \theta)}{129}}} \xrightarrow[]{D} N(0, 1)$ as n $\to \infty$, i.e. 
-
-$$\hat{\theta}_{mle} \sim N\Big(129\theta, \frac{\theta(1 - \theta)}{129}\Big)$$
+Since $\hat{\theta}_{mle} = \overline{Y}$, the Central Limit Theorem gives $\frac{\hat{\theta}_{mle} - \theta}{\sqrt{\frac{\theta(1 - \theta)}{129}}} \xrightarrow[]{D} N(0, 1)$ as n $\to \infty$, i.e. $\hat{\theta}_{mle} \sim N\Big(\theta, \frac{\theta(1 - \theta)}{129}\Big)$
 
 ```{r echo=TRUE}
 qnorm(0.975, mean = 0, sd = 1, lower.tail = TRUE, log.p = FALSE)
@@ -67,25 +63,23 @@ so the posterior distribution is $\theta|\textbf{y} \sim Beta(118 + \alpha, 11 +
 
 For $\theta \sim Beta(1, 1)$, the posterior distribution is $Beta(119, 12)$ and
 
-  * $E(\theta|\textbf{y}) = \frac{119}{131} \approx 0.91$ 
+  * $E(\theta|\textbf{y}) = \frac{119}{131} \approx 0.91$ (posterior mean) 
   
   * $Var(\theta|\textbf{y}) = \frac{119 \times 12}{(119 + 12)^2(119 + 12 + 1)} \approx  0.0006303934$
 
-The 95% credible interval for $\hat{\theta}$ under $Beta(1, 1)$ is
-
-$$E(\theta|\textbf{y}) \pm 1.96 \sqrt{Var(\theta|\textbf{y})} = \big(0.85, 0.95\big)$$
+The 95% credible interval for $\hat{\theta}$ under $Beta(1, 1)$ is $E(\theta|\textbf{y}) \pm 1.96 \sqrt{Var(\theta|\textbf{y})} = \big(0.85, 0.95\big)$
 
 # Question 3: Now assume a Beta(10,10) prior on $\theta$. What is the interpretation of this prior? Are we assuming we know more, less or the same amount of information as the prior used in Question 2?
 
 Similar to $Beta(1, 1)$ prior, $Beta(10, 10)$ prior assigns equal weights to the success and failure of the Bernouli random variables $Y_i$'s. As seen above, the Bayesian point estimate of $\theta$, $\hat{\theta}_B = E(\theta|\textbf{y})$, is a weighted average of the MLE $\hat{\theta}_{mle} = \overline{Y}$ of $\theta$ and the prior mean $E(\theta)$ with the respective weights $w_{mle} = \frac{129}{129 + \alpha + \beta}$ and $w_{\theta} = \frac{\alpha + \beta}{129 + \alpha + \beta}$. 
 
-Since $\hat{\theta}_{mle}$ is a consistent estimator of $\theta$ by the Weak Law of Large Number (i.e. $\hat{\theta}_{mle} \xrightarrow[]{P} \theta$), the Bayes estimate $\hat{\theta}_B$ will be closer to the MLE of $\theta$ for larger n. From $(*)$ we see that the sum $\alpha + \beta$ indicates the worth of the prior information relative to a sample of size $n = 129$. In particular, even though $E(\theta) = \frac{1}{2}$ for both $Beta(1, 1)$ and $Beta(10, 10)$, the latter assigns a bigger weight to the prior opinion.
+Since $\hat{\theta}_{mle}$ is a consistent estimator of $\theta$ by the Weak Law of Large Number (i.e. $\hat{\theta}_{mle} \xrightarrow[]{P} \theta$), the Bayes estimate $\hat{\theta}_B$ will be closer to the MLE of $\theta$ for larger n. From $(*)$ we see that the sum $\alpha + \beta$ indicates the worth of the prior information relative to a sample of size $n = 129$. In particular, even though the prior mean $E(\theta) = \frac{1}{2}$ for both $Beta(1, 1)$ and $Beta(10, 10)$, the latter assigns a bigger weight to the prior opinion.
 
   * Under $Beta(1, 1)$ prior, $\hat{\theta}_B = E(\theta|\textbf{y}) = 0.985 \hat{\theta}_{mle} + 0.015 E(\theta)$
   
    * Under $Beta(10, 10)$ prior, $\hat{\theta}_B = E(\theta|\textbf{y}) = 0.866 \hat{\theta}_{mle} + 0.134 E(\theta)$
    
-We are assuming more prior information available under $Beta(10, 10)$ and stressing less focus on data.
+We are assuming more prior information available/used in model estimation under $Beta(10, 10)$ and stressing less focus on real data.
 
 # Question 4: Create a graph in ggplot which illustrates
 
@@ -93,7 +87,7 @@ We are assuming more prior information available under $Beta(10, 10)$ and stress
 
 ## b) The priors and posteriors in question 2 and 3 (use `stat_function` to plot these distributions). Comment on what you observe. 
 
-Similar to the likelihood curve, the posterior density under $Beta(1, 1)$ also peaks at the MLE $\hat{\theta} = \overline{Y}$. When the prior is not flat as in the case of $Beta(10, 10)$, the peak of the posterior density curve is between that of the corresponding prior and the likelihood curves. This is because the posterior mean is the weighted average of the prior mean and the data. Also, since $w_{mle} > w_{theta}$, the peak of the posterior density curve under $Beta(10, 10)$ prior is closer to that of the likelihood curve. For the two priors, the posterior has smaller variance than the prior (i.e. the spread of prior curves is larger), implying data give us more information about where $\theta$ lies in its range.
+Similar to the likelihood curve, the posterior density under $Beta(1, 1)$ also peaks at the MLE $\hat{\theta} = \overline{Y}$. When the prior is not flat as in the case of $Beta(10, 10)$, the peak of the posterior density curve is between that of the corresponding prior and the likelihood curves. This is because the posterior mean is the weighted average of the prior mean and the data. Also, since $w_{mle} > w_{theta}$, the peak of the posterior density curve under $Beta(10, 10)$ prior is closer to that of the likelihood curve. For the two priors, the posterior has smaller variance than the prior (i.e. the spread of prior curves is larger than posterior curves), implying real data give us more information about where $\theta$ lies in its range for the chosen Beta parameters.
 
 ```{r echo=TRUE}
 n = 129; y = 118; theta = seq(0, 1, by = 0.001)
@@ -102,18 +96,10 @@ BinomLikelihood <- function(y,n){
     L(theta)
 }
 L_theta <- BinomLikelihood(y, n) ## Likelihood 
-prior_beta11 <- function(theta) {
-    dbeta(theta, 1, 1, ncp = 0)
-}
-posterior_beta11 <- function(theta) {
-    dbeta(theta, 119, 12, ncp = 0)
-}
-prior_beta1010 <- function(theta) {
-    dbeta(theta, 10, 10, ncp = 0)
-}
-posterior_beta1010 <- function(theta) {
-    dbeta(theta, 128, 21, ncp = 0)
-}
+prior_beta11 <- function(theta) {dbeta(theta, 1, 1, ncp = 0)}
+posterior_beta11 <- function(theta) {dbeta(theta, 119, 12, ncp = 0)}
+prior_beta1010 <- function(theta) {dbeta(theta, 10, 10, ncp = 0)}
+posterior_beta1010 <- function(theta) {dbeta(theta, 128, 21, ncp = 0)}
 data <- data.frame(theta, L_theta)
 theme_set(theme_minimal())
 ggplot(data, aes(x=theta)) + 
