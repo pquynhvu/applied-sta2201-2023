@@ -1,0 +1,220 @@
+---
+title: "Week 5: Bayesian linear regression and introduction to Stan"
+author: "Quynh Vu"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE, 
+  out.width = "100%",
+  fig.width = 10,
+  fig.height = 6.7, 
+  fig.retina = 3,
+  cache = FALSE)
+```
+
+```{r library}
+library(tidyverse)
+library(rstan)
+library(tidybayes)
+library(here)
+library(brms)
+library(ggplot2)
+library(ggpubr)
+library(rprojroot)
+```
+
+```{r echo = FALSE}
+kidiq <- read_rds(here("data","kidiq.RDS")) |> 
+         mutate(mom_hs_fc = as.factor(mom_hs))
+
+levels(kidiq$mom_hs_fc)[levels(kidiq$mom_hs_fc)==1] <- 'completed'
+levels(kidiq$mom_hs_fc)[levels(kidiq$mom_hs_fc)==0] <- 'didnt complete'
+``` 
+
+# Question 1: Use plots or tables to show three interesting observations about the data. Remember: Explain what your graph/ tables show & Choose a graph type that's appropriate to the data type
+
+First, we noticed two interesting observations of kids' scores whose moms finished high school. In particular, one kid scored 123, above 75% of their peers, despite the mom having a below-average IQ of 81.2. In contrast, the other kid scored 69, below 25% of their peers, whereas the mom had the highest IQ of 138.89.
+
+```{r echo=FALSE}
+kidiq |> ggscatterhist(x = "mom_iq", y = "kid_score", color = "mom_hs_fc", 
+                               size = 3, alpha = 0.6,
+                               palette = c("#00AFBB", "#FC4E07"), 
+                               margin.plot = "boxplot", ggtheme = theme_bw(),
+                               xlab = "Mom's IQ", ylab = "Kid's score",
+                               title = "Plot 1: Mom's IQ and Kid's score") 
+```
+
+On the other hand, kids' scores appeared to decrease as the mom who didn't finish high school aged and seemed to increase for those whose moms finished high school, and the latter tended to perform better overall. However, one kid whose mom did not complete high school scored 136, higher than the average score of those whose mom completed high school, given that his/her mom had an above-average IQ of 108.
+
+```{r echo=FALSE}
+kidiq |> ggplot(aes(mom_age, kid_score, color = mom_hs_fc)) + 
+         geom_point() +
+         geom_smooth()+
+         xlab("Mom's age") +
+         ylab("Kid's score") +
+         labs(title = "Plot 2: Kid's score and Mom's age")+
+         geom_point(data=kidiq |> filter(mom_hs == "didnt complete") |> filter(kid_score == 136),pch=21,size=4, colour="purple") +
+         facet_wrap(~mom_hs) 
+```
+
+Three interesting observations about the data are
+
+```{r echo=FALSE}
+interesting_obs <- c(2, 7, 213)
+kidiq[interesting_obs, ]
+```
+
+# Question 2: Change the prior to be much more informative (by changing the standard deviation to be 0.1). Rerun the model. Do the estimates change? Plot the prior and posterior densities. 
+
+The values of $\hat{R}$ are 1, suggesting the two chains have mixed well. However, the $N(80, 0.1^2)$ prior yields an estimate closer to the assigned mean $\mu$ of 80 and a slightly larger estimate for $\sigma$ while requiring smaller effective sample sizes.
+
+```{r echo=FALSE}
+y <- kidiq$kid_score
+mu0 <- 80; sigma0 <- 10 # mean and standard deviation of the prior
+data_sigma0 <- list(y = y, N = length(y), mu0 = mu0, sigma0 = sigma0)
+fit_sigma0 <- stan(file = here("kids2.stan"), data = data_sigma0, chains = 3, iter = 500)
+fit_sigma0
+
+dsamples_sigma0 <- fit_sigma0  |> gather_draws(mu, sigma) 
+dsamples_sigma0 |> median_qi(.width = 0.8)
+dsamples_sigma0 <- dsamples_sigma0 |> filter(.variable == "mu") 
+
+dsamples_sigma0 |> ggplot(aes(.value, color = "posterior")) + geom_density(size = 1) + 
+        xlim(c(70, 100)) + 
+        stat_function(fun = dnorm, 
+        args = list(mean = mu0, sd = sigma0), aes(colour = 'prior'), size = 1) +
+        scale_color_manual(name = "", values = c("prior" = "red", "posterior" = "black")) + 
+        ggtitle("Prior (sigma = 10) and posterior for mean test scores") + 
+        xlab("Score") +
+        ylab("Density")
+```
+
+```{r echo=FALSE}
+mu1 <- 80; sigma1 <- 0.1 
+data_sigma1 <- list(y = y, N = length(y), mu0 = mu1, sigma0 = sigma1)
+fit_sigma1 <- stan(file = here("kids2.stan"), data = data_sigma1, chains = 3, iter = 500)
+fit_sigma1
+
+dsamples_sigma1 <- fit_sigma1  |> gather_draws(mu, sigma) 
+dsamples_sigma1 |> median_qi(.width = 0.8)
+dsamples_sigma1 <- dsamples_sigma1 |> filter(.variable == "mu")
+
+dsamples_sigma1 |> ggplot(aes(.value, color = "posterior")) + geom_density(size = 1) + 
+        xlim(c(70, 100)) + 
+        stat_function(fun = dnorm, 
+        args = list(mean = mu0, sd = sigma0), aes(colour = 'prior'), size = 1) +
+        scale_color_manual(name = "", values = c("prior" = "red", "posterior" = "black")) + 
+        ggtitle("Prior (sigma = 0.1) and posterior for mean test scores") + 
+        xlab("Score") +
+        ylab("Density")
+```
+
+# Question 3 $Score = \alpha + \beta X$ where $X = 1$ if the mother finished high school and zero otherwise. 
+
+## a) Confirm that the estimates of the intercept and slope are comparable to results from `lm()` 
+
+**Simple linear regression:**
+
+```{r echo=FALSE}
+fit_lm <- lm(kid_score ~ mom_iq, data = kidiq)
+summary(fit_lm)
+```
+
+**Simple Bayesian regression:** $Score | \alpha, \beta, \sigma \sim N(\alpha + \beta X, \sigma^2)$
+
+```{r echo=FALSE}
+X <- as.matrix(kidiq$mom_hs, ncol = 1) # force this to be a matrix
+K <- 1
+data <- list(y = y, N = length(y), X =X, K = K)
+fit2 <- stan(file = here("kids3.stan"), data = data, iter = 1000)
+summary(fit2)$summary[c("alpha", "beta[1]"),]
+```
+
+The Bayesian estimates are analogous to the linear regression estimates using standard non-informative or weakly informative prior (as in Week 5 Lecture note slide 16-17), which is not the case here. However, we notice that the mean of the fitted values from the `lm()` model is analogous to the mean scores in Bayesian regression ($\approx$ 86.79), and the fitted values from the two approaches do not differ greatly, i.e. the estimates of the intercept and slope are comparable to results from `lm()`.
+
+```{r echo=FALSE}
+fitted_lm <- fit_lm$fitted.values; mean(fitted_lm)
+fitted_bayes <- 77.94793 + 11.25854*X; mean(fitted_bayes)
+```
+
+```{r echo=FALSE}
+true_score <- kidiq$kid_score
+mom_hs <- kidiq$mom_hs
+tab1 <- as.data.frame(cbind(mom_hs, true_score, fitted_lm, fitted_bayes))
+tab1 <- tab1 |> rename(fitted_bayes = V4)
+head(tab1)
+tail(tab1)
+```
+
+## b) Do a `pairs` plot to investigate the joint sample distributions of the slope and intercept. Comment briefly on what you see. Is this potentially a problem?
+
+We see that $\alpha$ and $\beta$ don't look reasonably centred, which may induce the opposite change in the intercept and make it hard to interpret the intercepts and hard to sample as the chain converges fast to stationarity. It is noteworthy that the effect of $\beta$ is cancelled out when $X = 0$, resulting in the underestimation of scores of kids' whose moms didn't finish high school and the overestimation of their counterparts as indicated in tables above. 
+
+```{r echo=FALSE}
+pairs(fit2, pars = c("alpha", "beta[1]"))
+```
+
+# Question 4: Add in mother's IQ as a covariate and rerun the model. Please  mean center the covariate before putting it into the model. Interpret the coefficient on the (centered) mum's IQ. 
+
+**Multiple Bayesian regression:** Score = 82.349488 + 5.664857`mom_hs` + 0.565145 `centered_mom_iq`
+
+The coefficient $\hat{\beta}_2 = 0.565145$ is the posterior mean $E(\beta_2| score)$, which is is the same as the OLS estimates of $\beta_2$ where 
+
+$$\begin{bmatrix} 1 & x_{1} & x_{2} \end{bmatrix}
+\begin{bmatrix} 82.349488 \\5.664857 \\0.565145 \end{bmatrix}$$
+
+gives the expected scores for each kid ($x_1$ = `mom_hs` and $x_2$ = `centered_mom_iq`)
+
+**Interpretation:** If we observe two kids whose mom both finished or didn't finish high school, 1 unit difference in  `centered_mom_iq` would make the kid's score to be expected to differ by 0.565145 points. 
+
+```{r echo=FALSE}
+kidiq <- kidiq |> mutate(centered_mom_iq = kidiq$mom_iq - mean(kidiq$mom_iq))
+X <- kidiq |> select(mom_hs, centered_mom_iq)|>
+              as.matrix()
+data <- list(y = y, N = length(y), X = X, K = 2)
+fit3 <- stan(file = here("kids3.stan"), data = data, iter = 1000)
+summary(fit3)$summary[c("alpha", "beta[1]", "beta[2]"),]
+```
+
+# Question 5: Confirm the results from Stan agree with `lm()`
+
+**Multiple linear regression:** Score = 82.12214 + 5.95012 `mom_hs` + 0.56391`centered_mom_iq`
+
+```{r echo=FALSE}
+fit_lm2 <- lm(kid_score ~ mom_hs + centered_mom_iq, data = kidiq)
+summary(fit_lm2)
+```
+
+# Question 6: Plot the posterior estimates of scores by education of mother for mothers who have an IQ of 110. 
+
+```{r echo=TRUE}
+x_new <- 110
+post_samples <- extract(fit3)
+alpha_hat <- post_samples[["alpha"]]
+beta1_hat <- post_samples[["beta"]][,1]
+beta2_hat <- post_samples[["beta"]][,2]
+lin_pred0 <- alpha_hat + beta1_hat*0 + beta2_hat*(x_new - mean(kidiq$mom_iq))
+lin_pred1 <- alpha_hat + beta1_hat*1 + beta2_hat*(x_new - mean(kidiq$mom_iq))
+
+par(mfrow = c(1, 2))
+hist(lin_pred0, xlab = "Posterior estimates of score", main = "Mom who didn't finish high school")
+hist(lin_pred1, xlab = "Posterior estimates of score", main = "Mom who finished high school")
+```
+
+# Question 7: Generate and plot (as a histogram) samples from the posterior predictive distribution for a new kid with a mother who graduated high school and has an IQ of 95. 
+
+```{r echo=TRUE}
+sigma <- post_samples[["sigma"]]
+lin_pred <- alpha_hat + beta1_hat*1 + beta2_hat*(95 - mean(kidiq$mom_iq))
+y_new <- rnorm(n = length(sigma),mean = lin_pred, sd = sigma)
+y_new[1:20]
+hist(y_new, main = "Posterior predictive distribution for a new kid with a mother who graduated 
+     high school and has an IQ of 95", xlab = "Predicted score")
+```
