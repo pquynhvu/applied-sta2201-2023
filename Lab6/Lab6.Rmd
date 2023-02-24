@@ -1,0 +1,245 @@
+---
+title: "Week 6: Visualizing the Bayesian Workflow"
+author: "Quynh Vu"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE, 
+  out.width = "100%",
+  fig.width = 10,
+  fig.height = 6.7, 
+  fig.retina = 3,
+  cache = FALSE)
+```
+
+```{r libraries}
+library(tidyverse)
+library(here)
+# for bayes stuff
+library(rstan)
+library(bayesplot) 
+library(loo) 
+library(tidybayes) 
+library(reshape2)
+```
+
+```{r echo=FALSE}
+ds <- read_rds(here("data","births_2017_sample.RDS"))
+ds <- ds |> rename(birthweight = dbwt, gest = combgest) |> 
+            mutate(preterm = ifelse(gest<32, "Y", "N"),
+                   log_birthweight = log(birthweight),
+                   log_gest = log(gest),
+                   preterm_binary = ifelse(gest < 32, 1, 0)) |> 
+            filter(ilive=="Y",gest< 99, birthweight<9.999)
+```
+
+# Question 1: Use plots or tables to show three interesting observations about the data. Remember:
+
+- Explain what your graph/ tables show
+- Choose a graph type that's appropriate to the data type
+- If you use `geom_smooth`, please also plot the underlying data
+
+Feel free to replicate one of the scatter plots in the lectures as one of the interesting observations, as those form the basis of our models. 
+
+On the log scale, birth weight appears to increase as gestational age increases, and birth weight is higher after preterm. However, there are some exceptions that birth weight after preterm falls below the average birth weight during preterm and birth weight during preterm is higher than the average of birth weight after preterm.
+
+```{r echo=FALSE}
+ds |> ggplot(aes(log_gest, log_birthweight, color = preterm)) +
+              geom_point()+
+              geom_smooth(method = lm, se = TRUE) +
+              theme_bw()+
+              xlab("Logged gestational age") +
+              ylab("Logged birth weight") 
+```
+
+The three interesting observations about the data are
+
+```{r echo=FALSE}
+ds %>% group_by(preterm) |> summarise_at(vars(log_birthweight), list(avg_log_birthweight = mean))
+ds |> filter((log_gest > 3.68 & log_birthweight < 0.2959672)| (log_gest < 3.4 & log_birthweight > 1.1786669))
+```
+
+# Question 2: Model 1 has log birth weight as a function of log gestational age $\log(y_i) \sim N(\beta_1 + \beta_2\log(x_i), \sigma^2)$
+
+Let's put some weakly informative priors on all parameters i.e. $\beta \sim N(0, 1)$ and $\sigma \sim N^+(0,1)$ where the plus means positive values only i.e. Half Normal. 
+
+```{r echo=FALSE}
+iter = 1000
+ds$log_weight <- log(ds$birthweight)
+ds$log_gest_c <- (log(ds$gest) - mean(log(ds$gest)))/sd(log(ds$gest))
+```
+
+```{r echo=FALSE}
+simulated_log_weight = NULL
+for(i in 1:nrow(ds)){
+    beta1 = rnorm(iter, mean = 0, sd = 1)
+    beta2 = rnorm(iter, mean = 0, sd = 1)
+    sigma = abs(rnorm(iter, mean = 0, sd = 1))
+    simulated_log_weight[i] = rnorm(1, beta1[iter] + beta2[iter]*ds$log_gest_c[i], sigma[iter]^2)
+}
+```
+
+## Plot the resulting distribution of simulated (log) birth weights
+
+```{r echo=FALSE}
+hist(simulated_log_weight, freq = FALSE, main = "Distribution of simulated (log) birth weights", xlab = "Simulated (log) birth weights", ylim = c(0,0.3))
+lines(density(simulated_log_weight), lwd = 2, col = "red")
+```
+
+## Plot ten simulations of (log) birthweights against gestational age
+
+```{r echo=FALSE}
+simulated_log_weight = NULL
+for(i in 1:nrow(ds)){
+    beta1 = rnorm(iter, mean = 0, sd = 1)
+    beta2 = rnorm(iter, mean = 0, sd = 1)
+    sigma = abs(rnorm(iter, mean = 0, sd = 1))
+    simulated_log_weight[i] = rnorm(10, beta1[iter] + beta2[iter]*ds$log_gest_c[i], sigma[iter]^2)[10]
+}
+
+tab1 <- data.frame(simulated_log_weight, ds$gest)|>
+        rename(gest_age = ds.gest)
+tab1 |> ggplot(aes(log(gest_age), simulated_log_weight)) +
+              geom_point()+
+              geom_smooth(method = lm, se = TRUE) +
+              theme_bw()+
+              xlab("Loged Gestational age") +
+              ylab("Simulated Logged birth weight") 
+```
+
+## Run the model
+
+```{r echo=FALSE}
+stan_data <- list(N = nrow(ds),
+                  log_weight = ds$log_weight,
+                  log_gest = ds$log_gest_c)
+mod1 <- stan(data = stan_data, file = here("simple_weight.stan"), iter = 500, seed = 243)
+summary(mod1)$summary[c("beta[1]", "beta[2]", "sigma"),]
+```
+
+# Question 3: Based on model 1, give an estimate of the expected birthweight of a baby who was born at a gestational age of 37 weeks. 
+
+First, we center and standardized the log of gestational age of 37: $log(x_i) = \frac{log(37) - 3.650894}{0.06723322} = -0.5945826$. 
+
+An estimate of the expected birthweight of a baby who was born at a gestational age of 37 weeks is $e^{1.1624783 + 0.1437529*(-0.5945826)} \approx 2.935874$. .which is very closed to the average observed birthweight of babies born at a gestational age of 37 weeks. 
+
+```{r echo=TRUE}
+ds |> filter(gest == 37) |>
+      summarise_at(vars(birthweight), list(expected_weight = mean))
+```
+
+# Question 4: Write a stan model to run Model 2, and run it. 
+
+Model 2 has an interaction term between gestation and prematurity
+
+$$
+\log(y_i) \sim N(\beta_1 + \beta_2\log(x_i) + \beta_2 z_i + \beta_3 z_i + \beta_4 \log(x_i) z_i, \sigma^2)
+$$
+```{r echo=FALSE}
+ds$log_weight <- log(ds$birthweight)
+ds$log_gest_c <- (log(ds$gest) - mean(log(ds$gest)))/sd(log(ds$gest))
+inter = ds$log_gest_c*ds$preterm_binary
+
+stan_data2 <- list(N = nrow(ds),
+                   log_weight = ds$log_weight,
+                   log_gest = ds$log_gest_c,
+                   preterm = ds$preterm_binary,
+                   Inter = inter)
+mod2 <- stan(data = stan_data2, file = here("stan_model2.stan"), iter = 500, seed = 243)
+summary(mod2)$summary[c("beta[1]", "beta[2]", "beta[3]", "beta[4]", "sigma"),]
+```
+
+# Question 5 For reference I have uploaded some model 2 results. Check your results are similar. 
+
+```{r}
+load(here("mod2.Rda"))
+summary(mod2)$summary[c(paste0("beta[", 1:4, "]"), "sigma"),]
+```
+
+# Question 6: Make a similar plot to the one above but for model 2, and **not** using the bayes plot in built function (i.e. do it yourself just with `geom_density`)
+
+```{r echo=FALSE}
+set.seed(1856)
+y <- ds$log_weight
+yrep2 <- as.data.frame(extract(mod2)[["log_weight_rep"]])
+yrep1 <- as.data.frame(extract(mod1)[["log_weight_rep"]])
+```
+
+```{r echo=FALSE}
+sample_yrep2_100 <- tail(yrep2, n = 100)
+sample_yrep2_100 <- as.data.frame(t(as.matrix(sample_yrep2_100)))
+  
+tab2 <- data.frame(y, sample_yrep2_100)
+
+long = melt(tab2)
+ggplot(long, aes (x = value, color = variable)) +
+    geom_density() + 
+    theme_bw()+
+    labs(title = "Distribution of observed vs predicted birthweight")+
+    theme(legend.position = "none")
+```
+
+# Question 7: Use a test statistic of the proportion of births under 2.5kg. Calculate the test statistic for the data, and the posterior predictive samples for both models, and plot the comparison (one plot per model). 
+
+```{r echo=FALSE}
+prop_stat_25 <- function(y){
+  mean(y < log(2.5))
+}
+```
+
+The test statistics for the data are
+
+```{r echo=FALSE}
+tab3 <- ds |> filter(preterm == "Y")
+tab4 <- ds |> filter(preterm == "N")
+```
+
+```{r echo=TRUE}
+prop_stat_25(tab3$log_birthweight) # test statistic for group during preterm
+prop_stat_25(tab4$log_birthweight) # test statistic for group after preterm
+```
+
+**Model 1:**
+
+```{r echo=FALSE}
+yrep1 <- extract(mod1)[["log_weight_rep"]] 
+ppc_stat_grouped(ds$log_weight, yrep1, group = ds$preterm, stat = 'prop_stat_25')
+```
+**Model 2:**
+
+```{r echo=FALSE}
+yrep2 <- extract(mod2)[["log_weight_rep"]] 
+ppc_stat_grouped(ds$log_weight, yrep2, group = ds$preterm, stat = 'prop_stat_25')
+```
+# Question 8: Based on the original dataset, choose one (or more) additional covariates to add to the linear regression model. Run the model in Stan, and compare with Model 2 above on at least 2 posterior predictive checks. 
+
+```{r echo=FALSE}
+stan_data3 <- list(N = nrow(ds),
+                  log_weight = ds$log_weight,
+                  log_gest = ds$log_gest_c,
+                  log_bmi = log(ds$bmi))
+mod3 <- stan(data = stan_data3, file = here("stan_model3.stan"), iter = 500, seed = 243)
+summary(mod3)$summary[c("beta[1]", "beta[2]", "beta[3]", "sigma"),]
+```
+**Posterior predictive checks:**
+
+By PPCs criterion, when comparing our original data set with 100 replicates, the new liner regression model with an additional covariate `log_bmi` does not fit the data as well as model 2 with an interaction term, as ones can see the density curves of those 100 replicates follow the observed density curve very loosely.
+
+```{r echo=TRUE}
+set.seed(1856)
+yrep3 <- extract(mod3)[["log_weight_rep"]] 
+ppc_dens_overlay(y, yrep3[sample(nrow(yrep3), 100), ])  + ggtitle("Distribution of observed versus predicted birthweights")
+```
+
+When comparing the two models using test statistics of the proportion of births under 2.5kg, we still see that the new liner regression model with an additional covariate `log_bmi` does not fit the data as well as model 2 since the test statistics for the posterior predictive samples do not overlap or stay close to the test statistic for the data.
+
+```{r echo=FALSE}
+ppc_stat_grouped(ds$log_weight, yrep3, group = ds$preterm, stat = 'prop_stat_25')
+```
