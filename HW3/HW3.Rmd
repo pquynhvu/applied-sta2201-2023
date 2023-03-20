@@ -1,0 +1,98 @@
+---
+title: "STA2201 Winter 2023 Assignment 3"
+output: pdf_document
+author: "Quynh Vu"
+date: "2023-03-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE, 
+  out.width = "100%",
+  fig.width = 10,
+  fig.height = 6.7, 
+  fig.retina = 3,
+  cache = TRUE)
+```
+
+```{r echo=FALSE}
+library(tinytex)
+library(tidyverse)
+library(here)
+library(rstan)
+library(bayesplot) 
+library(loo) 
+library(tidybayes) 
+library(reshape2)
+library(lubridate)
+library(gridExtra)
+library(rvest)
+library(janitor)
+library(anytime) 
+library(zoo)
+library(Hmisc)
+library(forecast)
+library(ggpubr)
+library(knitr)
+```
+
+# Fertility intentions: This question relates to a 2016 survey of US women who were asked about their future fertility intentions. The survey data is in the file `intentions_survey`. Also relevant to this question is the `us_pops` data file, which contains the number of women in the US in 2016 by age group, education and marital status. For this question, we are interested in obtaining estimates of $p_a$, which is the probability that a woman in age group $a$ wants to have children in future, for all age groups $a = 1, \dots A$. In this case we have a total of $A=5$ age groups (20-24, 25-29, 30-34, 35-39, 40-44).
+
+```{r, include=FALSE}
+intentions_true_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/HW3/fertility_intentions_true.csv")
+survey_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/HW3/intentions_survey.csv") 
+us_pops_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/HW3/us_pop.csv")
+intentions_pop_df <- left_join(survey_df, us_pops_df)
+intentions_pop_df <- left_join(intentions_pop_df, intentions_true_df, by = "age_gp") |>
+                     rename(p_age_true = true,
+                            num_women = n) |>
+                     mutate(num_more_kids = p_age_true*num_women)
+```
+
+## a) Make a plot which compares the proportions surveyed women by age, education, and marital status to the same proportions in the overall US population. Briefly comment on what you observe. 
+
+```{r echo=FALSE}
+dd <- intentions_pop_df |> group_by(age_gp) |> mutate(p_age = sum(wants_more_kids)/n()) |> ungroup() |>
+                           group_by(edu) |> mutate(p_edu_true = sum(num_more_kids)/sum(num_women),
+                                                   p_edu = sum(wants_more_kids)/n()) |> ungroup() |>
+                          group_by(marital) |> mutate(p_marital_true = sum(num_more_kids)/sum(num_women),
+                                                      p_marital = sum(wants_more_kids)/n())|> ungroup() 
+```
+
+```{r echo=FALSE}
+ggp1 <- dd |> select(age_gp, p_age, p_age_true) |> 
+              distinct() |>
+              melt() |>
+              ggplot(aes(x = age_gp, y = value, fill = variable)) + 
+                     geom_bar(stat = "identity", position = "dodge", alpha = 0.5) +
+                     labs(x = "Age groups", y = "Proportion") +
+                     scale_fill_discrete(name = "Population", labels = c("Surveyed", "US")) + 
+                     theme(axis.text.x=element_text(angle=60, hjust=1)) +
+                     theme_minimal()
+ggp2 <- dd |> select(edu, p_edu, p_edu_true) |> 
+              distinct() |>
+              melt() |>
+              ggplot(aes(x = edu, y = value, fill = variable)) + 
+                     geom_bar(stat = "identity", position = "dodge", alpha = 0.5) +
+                     labs(x = "Education", y = "Proportion") +
+                     scale_fill_discrete(name = "Population", labels = c("Surveyed", "US")) + 
+                     theme(axis.text.x=element_text(angle=60, hjust=1))+
+                     theme_minimal()
+ggp3 <- dd |> select(marital, p_marital, p_marital_true) |> 
+              distinct() |>
+              melt() |>
+              ggplot(aes(x = marital, y = value, fill = variable)) + 
+                     geom_bar(stat = "identity", position = "dodge", alpha = 0.5) +
+                     labs(x = "Martial status", y = "Proportion") +
+                     scale_fill_discrete(name = "Population", labels = c("Surveyed", "US")) + 
+                     theme(axis.text.x=element_text(angle=60, hjust=1))+
+                     theme_minimal()
+ggarrange(ggp1, ggp2, ggp3, nrow = 2, ncol = 2, common.legend = TRUE, legend="bottom")  
+```
+The population surveyed is younger than the general US population. They seem to be a disproportionately mid-educated population. That is, the US proportion of women not having completed high school is almost twice as high as the same group in the surveyed women, and the proportion of US women with a post-grad degree is more than twice as the same group in surveyed women. Meanwhile, relatively a lot more of the surveyed women have had some college experience than the US women population. Probably because of the disproportionately middle-ness of the surveyed women, there are way fewer surveyed women that have been formerly married and way more that have been never married. 
+
+
+  
