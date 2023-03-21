@@ -39,7 +39,7 @@ library(ggpubr)
 library(knitr)
 ```
 
-# Fertility intentions: This question relates to a 2016 survey of US women who were asked about their future fertility intentions. The survey data is in the file `intentions_survey`. Also relevant to this question is the `us_pops` data file, which contains the number of women in the US in 2016 by age group, education and marital status. For this question, we are interested in obtaining estimates of $p_a$, which is the probability that a woman in age group $a$ wants to have children in future, for all age groups $a = 1, \dots A$. In this case we have a total of $A=5$ age groups (20-24, 25-29, 30-34, 35-39, 40-44).
+# 1. Fertility intentions: This question relates to a 2016 survey of US women who were asked about their future fertility intentions. The survey data is in the file `intentions_survey`. Also relevant to this question is the `us_pops` data file, which contains the number of women in the US in 2016 by age group, education and marital status. For this question, we are interested in obtaining estimates of $p_a$, which is the probability that a woman in age group $a$ wants to have children in future, for all age groups $a = 1, \dots A$. In this case we have a total of $A=5$ age groups (20-24, 25-29, 30-34, 35-39, 40-44).
 
 ```{r, include=FALSE}
 intentions_true_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/HW3/fertility_intentions_true.csv")
@@ -47,19 +47,31 @@ survey_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/
 us_pops_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/HW3/us_pop.csv")
 intentions_pop_df <- left_join(survey_df, us_pops_df)
 intentions_pop_df <- left_join(intentions_pop_df, intentions_true_df, by = "age_gp") |>
-                     rename(p_age_true = true,
-                            num_women = n) |>
-                     mutate(num_more_kids = p_age_true*num_women)
+                     rename(p_age_true = true, num_women = n) |>
+                     mutate(num_more_kids_true = p_age_true*num_women)
 ```
 
 ## a) Make a plot which compares the proportions surveyed women by age, education, and marital status to the same proportions in the overall US population. Briefly comment on what you observe. 
 
 ```{r echo=FALSE}
 dd <- intentions_pop_df |> group_by(age_gp) |> mutate(p_age = sum(wants_more_kids)/n()) |> ungroup() |>
-                           group_by(edu) |> mutate(p_edu_true = sum(num_more_kids)/sum(num_women),
+                           group_by(edu) |> mutate(p_edu_true = sum(num_more_kids_true)/sum(num_women),
                                                    p_edu = sum(wants_more_kids)/n()) |> ungroup() |>
-                          group_by(marital) |> mutate(p_marital_true = sum(num_more_kids)/sum(num_women),
-                                                      p_marital = sum(wants_more_kids)/n())|> ungroup() 
+                           group_by(marital) |> mutate(p_marital_true = sum(num_more_kids_true)/sum(num_women),
+                                                      p_marital = sum(wants_more_kids)/n())|> ungroup() |>
+                           mutate(age_fc = case_when(age_gp == "20-24" ~ 1,
+                                                     age_gp == "25-29" ~ 2,
+                                                     age_gp == "30-34" ~ 3,
+                                                     age_gp == "35-39" ~ 4,
+                                                     age_gp == "40-44" ~ 5),
+                                  edu_fc = case_when(edu == "<HS" ~ 1,
+                                                     edu == "HS" ~ 2,
+                                                     edu == "Some College" ~ 3,
+                                                     edu == "Bachelor" ~ 4,
+                                                     edu == "Post-Grad" ~ 5),
+                                  formerly_married = ifelse(marital == "Formerly Married", 1, 0),
+                                  married = ifelse(marital == "Married", 1, 0))
+dd$age_gp <- reorder(dd$age_gp, as.numeric(gsub("-\\d+","", dd$age_gp)))
 ```
 
 ```{r echo=FALSE}
@@ -92,7 +104,142 @@ ggp3 <- dd |> select(marital, p_marital, p_marital_true) |>
                      theme_minimal()
 ggarrange(ggp1, ggp2, ggp3, nrow = 2, ncol = 2, common.legend = TRUE, legend="bottom")  
 ```
-The population surveyed is younger than the general US population. They seem to be a disproportionately mid-educated population. That is, the US proportion of women not having completed high school is almost twice as high as the same group in the surveyed women, and the proportion of US women with a post-grad degree is more than twice as the same group in surveyed women. Meanwhile, relatively a lot more of the surveyed women have had some college experience than the US women population. Probably because of the disproportionately middle-ness of the surveyed women, there are way fewer surveyed women that have been formerly married and way more that have been never married. 
+The surveyed population doesn't seem to be representative of the US population (i.e. according to the survey, American women aged 25-29 or those with a bachelor's degree are the most willing to have kids in the future while in reality, it is women aged 20-24 or those who have earned some college experience.) Classifying across marital status yields more accurate estimates in the sense of a lower surveyed proportion corresponding to a lower true one, and vice versa.
 
+## b) Calculate the proportion of survey women in each age group that want to have children. We will refer to this set of estimates as $\hat{p}^{\text{raw}}_a$ for each age group $a$.
 
-  
+```{r echo=FALSE}
+tab1 <- dd |> select(age_gp, p_age) |> distinct() |> rename("Age groups" = age_gp,
+                                                            p_raw_hat = p_age)
+tab1
+```
+## c) Calculate the post-stratified estimates 
+
+$$\hat{p}^{\text{ps}}_a = \frac{\sum_{g = 1}^G \hat{p}^{\text{raw}}_{g[a]} \times N_{g[a]}}{\sum_{g = 1}^G N_{g[a]}}$$
+
+where $g$ refers to a particular education/marital status group (e.g. people who are married and have less than a high school degree). There are a total of $G = 5\times3 = 15$ groups within each age group. Note that $\hat{p}^{\text{raw}}_{g[a]}$ refers to the observed proportion of women in group $g$ who are aged $a$ who want more children and $N_{g[a]}$ refers to the size of that particular population group who are aged $a$ in the US population. 
+
+```{r echo=FALSE}
+tab2 <- dd |> select(age_gp, edu, marital, wants_more_kids, num_women) |>
+              group_by(age_gp, edu, marital) |>
+              mutate(p_hat_ga = sum(wants_more_kids)/n()) |> 
+              ungroup() |>
+              select(age_gp, edu, marital, num_women, p_hat_ga) |> 
+              distinct() |>
+              rename(N_ga = num_women) |>
+              mutate(dummy1 = N_ga*p_hat_ga) |>
+              group_by(age_gp) |>
+              mutate(p_ps = sum(dummy1)/sum(N_ga)) |>
+              select(c(age_gp, p_ps)) |>
+              distinct()
+tab2
+```
+## d) Fit the following hierarchical model
+
+$$\begin{aligned}
+&y_{i} | \pi_{i} \sim \operatorname{Bern}\left(\pi_{i}\right)\\
+ \pi_i  &=\operatorname{logit}^{-1}\left(\beta_0+\beta_1 \text {formerly married}_{i}+\beta_2  \text {married}_{i}+\alpha_{j[i]}^{\text{age}}+\alpha_{k[i]}^{\text{edu}} \right) \\
+\alpha_{j}^{\text{age}} & \sim \text{N}\left(\alpha_{j-1}^{\text{age}}, \sigma_{\text{age}}^{2}\right), \text { for } j=2, \ldots, 5 \\
+\alpha_{k}^{\text{edu}} & \sim \text{N}\left(0, \sigma_{\text{edu}}^{2}\right), \text { for } k=1, \ldots, 5\\
+\end{aligned}$$
+
+where $y_i = 1$ if respondent $i$ wants more children and 0 otherwise, and the $\text {formerly married}_{i}$ and $\text { married}_{i}$ variables are indicator variables. Note you will need to specify priors on $\beta_0, \beta_1, \beta_2, \alpha_{1}^{\text{age}}$ and the variance parameters. Create a plot of the estimated age effects.
+
+```{r include = FALSE}
+iter1 = 3000
+nchain1 = 10
+stan_df <- list(N = length(dd$wants_more_kids),
+                K = 3,
+                formerly_married = dd$formerly_married,
+                married = dd$married,
+                A = 5,
+                E = 5,
+                age = dd$age_fc,
+                edu = dd$edu_fc,
+                y = dd$wants_more_kids)
+```
+
+```{r echo=FALSE}
+mod <- stan(data = stan_df, file = here("C:/GitHub/STA2201/STA2201-W2023/HW3/fertility_pop.stan"), 
+            chains = nchain1, iter = iter1, warmup =1000, refresh = 0)
+tab3 <- summary(mod)[["summary"]][c(paste0("beta[",1:3, "]"), paste0("alpha_age[",1:5, "]"), paste0("alpha_edu[",1:5, "]")),]
+tab3
+```
+```{r echo = FALSE}
+alpha_age <- extract(mod)[["alpha_age"]] |> as.data.frame() |> 
+             rename("20-24" = V1, "25-29" = V2, "30-34" = V3, "35-39" = V4,"40-44" = V5) |>
+             melt() |>
+             rename(age_gp = variable)
+alpha_age |> ggplot(aes(x = age_gp, y = value, fill=age_gp)) + 
+                    geom_boxplot() + 
+                    labs(title = "Estimated age effects by age group",
+                         x = "Age groups",
+                         y = expression(alpha[age]),
+                         fill = "Age groups") +
+                    theme_minimal()
+```
+
+## e) Calculate the multilevel-regression-with-post-stratification (MRP) estimates
+
+$$
+\hat{p}^{\text {MRP}}_a = \frac{\sum_{g = 1}^G \hat{p}^{\text{MR}}_{g[a]} \times N_{g[a]}}{\sum_{g = 1}^G N_{g[a]}}
+$$
+
+where $\hat{p}^{\text{MR}}_{g[a]}$ is the proportion of women in group $g$ who are aged $a$ who want more children estimated from your model in d). Report the median estimate of each $\hat{p}^{\text MRP}_a$ as well as the 95% CIs. 
+
+```{r echo=FALSE}
+p_hat <- function(y){
+  exp(y)/(1 + exp(y))
+}
+```
+
+```{r echo=FALSE}
+age_fc <- data.frame(age_fc = dd$age_fc) |>  distinct()
+edu_fc <- data.frame(edu_fc = dd$edu_fc) |>  distinct()
+```
+
+```{r echo=FALSE}
+beta <- tab3[1:3, c(1, 5, 8)] |> as.data.frame()
+alpha_age <- tab3[4:8, c(1, 5, 8)] |> as.data.frame()
+alpha_edu <- tab3[9:13, c(1, 5, 8)] |> as.data.frame()
+```
+
+```{r echo = FALSE}
+pi_df <- data.frame(age_gp = dd$age_gp, edu = dd$edu, marital = dd$marital, age_fc = dd$age_fc, 
+                    edu_fc = dd$edu_fc, formerly_married = dd$formerly_married, married = dd$married,
+                    N_ga = dd$num_women) |>              
+         distinct() |>
+         mutate(p_MR = p_hat(beta[1,1] + beta[2,1]*formerly_married + beta[3,1]*married + alpha_age[age_fc, 1] + alpha_edu[edu_fc, 1]),
+                LB = p_hat(beta[1,2] + beta[2,2]*formerly_married + beta[3,2]*married + alpha_age[age_fc, 2] + alpha_edu[edu_fc, 2]),
+                UB = p_hat(beta[1,3] + beta[2,3]*formerly_married + beta[3,3]*married + alpha_age[age_fc, 3] + alpha_edu[edu_fc, 3])) |>
+         group_by(age_gp) |>
+         mutate(p_MRP = sum(p_MR*N_ga)/sum(N_ga),
+                LB = sum(LB*N_ga)/sum(N_ga),
+                UB = sum(UB*N_ga)/sum(N_ga)) |> 
+         select(c(age_gp, p_MRP, LB, UB)) |>
+         tibble() |>
+         distinct()
+pi_df
+```
+## f) The true proportions of women wanting more children by age group are listed in `fertility_intentions_true`. Report the absolute difference by age group for each of the estimates $\hat{p}^{\text{raw}}_a$, $\hat{p}^{\text{ps}}_a$ and $\hat{p}^{\text{MRP}}_a$, as well as the mean absolute difference across all age groups. Comment on what you observe based on the relative performance of each of the estimation approaches. 
+
+Overall the Bayesian model yields the least accurate estimates of the proportion of women who want kids in a given age group and the true proportions, while the post-stratified estimates are the most accurate, except for the group of women aged 35-39. The $p_{raw}$ estimates seem unstable.
+
+```{r echo=FALSE}
+get_absolute_difference = function(p_true, p_hat){
+  abs(p_hat - p_true)
+}    
+```
+
+```{r echo=FALSE}
+p_compare <- data.frame(age_gp = dd$age_gp) |> distinct() |>
+             left_join(intentions_true_df, by = "age_gp") |>
+             rename(p_true = true) |>
+             mutate(p_raw = tab1$p_raw_hat,
+                    p_ps = tab2$p_ps, 
+                    p_MRP = pi_df$p_MRP,
+                    abs_diff_p_raw = get_absolute_difference(p_true, p_raw),
+                    abs_diff_p_ps = get_absolute_difference(p_true, p_ps),
+                    abs_diff_p_MRP = get_absolute_difference(p_true, p_MRP))
+p_compare
+```
