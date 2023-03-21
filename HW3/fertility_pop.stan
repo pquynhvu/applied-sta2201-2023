@@ -5,8 +5,8 @@ data {
   int<lower=0, upper=1> married[N]; 
   int<lower=1> A;                           // # of age groups
   int<lower=1> E;                           // # of education levels
-  int<lower=1> age_i[N];                    // age factor levels
-  int<lower=0> edu_i[N];                    // education factor levels
+  int<lower=1> age[N];                    // age factor levels
+  int<lower=0> edu[N];                    // education factor levels
   int<lower=0, upper =1> y[N];              // outcome
 }
 parameters{
@@ -19,7 +19,7 @@ parameters{
 transformed parameters{
   vector[N] lin_pred; 
   for (i in 1:N){
-    lin_pred[i] = beta[1]+beta[2]*formerly_married[i]+beta[3]*married[i]+alpha_age[age_i[i]]+alpha_edu[edu_i[i]];
+    lin_pred[i] = beta[1]+beta[2]*formerly_married[i]+beta[3]*married[i]+alpha_age[age[i]]+alpha_edu[edu[i]];
  }
 }
 model {
