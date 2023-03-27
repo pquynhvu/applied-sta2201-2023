@@ -21,6 +21,6 @@ generated quantities{
   vector[P] mu_p;
   mu_p[1] = normal_rng(mu[T], sigma);
   for(i in 2:P){
-    mu_p[i] = normal_rng(mu[i - 1], sigma);
+    mu_p[i] = normal_rng(mu_p[i - 1], sigma);
   }
 }
