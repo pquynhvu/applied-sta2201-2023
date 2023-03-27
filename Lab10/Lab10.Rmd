@@ -70,7 +70,7 @@ Extract the results:
 
 ```{r echo=FALSE}
 res <- mod |> gather_draws(mu[t]) |> median_qi() |> mutate(year = years[t]) 
-head(res)
+head(res, 9)
 ```
 
 Plot the results:
@@ -107,7 +107,7 @@ mod2 <- stan(data = stan_data2, file = here("C:/QV/STA 2201/STA2201-W2023/Lab10/
 ```{r echo=FALSE}
 res2 <- mod2 |> gather_draws(mu[t]) |> median_qi() |> mutate(year = years[t]) 
 res_p <- mod2 |> gather_draws(mu_p[p]) |> median_qi() |> mutate(year = years[nyears] + p) 
-head(res_p)
+head(res_p, 9)
 ```
 
 ```{r echo=FALSE}
@@ -122,7 +122,7 @@ ggp2 <- lka |> ggplot(aes(year, logit_ratio)) +
                       geom_ribbon(data = res_p, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "red")+
                       labs(title = "Ratio of neonatal to other child mortality (logged), Sri Lanka",
                       y = "log ratio", 
-                      subtitle = "2023 projection in red")
+                      subtitle = "2023 linear projection in red")
 ggp2
 ```
 
@@ -145,7 +145,7 @@ mod3 <- stan(data = stan_data3, file = here("C:/QV/STA 2201/STA2201-W2023/Lab10/
 ```{r echo=FALSE}
 res3 <- mod3 |> gather_draws(mu[t]) |> median_qi() |> mutate(year = years[t]) 
 res_p3 <- mod3 |> gather_draws(mu_p[p]) |> median_qi() |> mutate(year = years[nyears] + p) 
-head(res_p3)
+head(res_p3, 9)
 ```
 
 ```{r echo=FALSE}
@@ -184,7 +184,7 @@ mod4 <- stan(data = stan_data4, file = here("C:/QV/STA 2201/STA2201-W2023/Lab10/
 ```{r echo=FALSE}
 res4 <- mod4 |> gather_draws(mu[t]) |> median_qi() |> mutate(year = years[t]) 
 res_p4 <- mod4 |> gather_draws(mu_p[p]) |> median_qi() |> mutate(year = years[nyears] + p) 
-head(res_p4)
+head(res_p4, 9)
 ```
 
 ```{r echo=FALSE}
@@ -258,8 +258,8 @@ mod5 <- stan(data = stan_data5, file = here("C:/QV/STA 2201/STA2201-W2023/Lab10/
 
 ```{r echo=FALSE}
 res5 <- mod5 |> gather_draws(mu[t]) |> median_qi() |> mutate(year = years[t]) 
-res_p5 <- mod5 |> gather_draws(mu_p[p]) |> median_qi() |> mutate(year = years[nyears] + p) 
-head(res_p5)
+res_p5 <- mod5 |> gather_draws(mu_p[p]) |> median_qi() |> mutate(year = years2[nyears2] + p) 
+head(res_p5, 18)
 ```
 Without VR data, the second-ordered random walk model yields smaller estimates of the log ratios than the observed values from 2006 to 2014 and predicts lower log ratios for the period from 2015 to 2023.
 
