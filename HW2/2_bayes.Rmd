@@ -1,0 +1,882 @@
+---
+title: "STA2201H Winter 2023 Assignment 2"
+output: 
+  pdf_document:
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE, 
+  out.width = "100%",
+  fig.width = 10,
+  fig.height = 6.7, 
+  fig.retina = 3,
+  cache = TRUE)
+```
+
+```{r library}
+library(ggplot2)
+library(reshape2)
+library(tidyverse)
+library(readr)
+library(rstan)
+library(tidybayes)
+library(here)
+library(loo)
+library(bayesplot)
+library(stringr)
+library(stats)
+```
+
+**Due:** 11:59pm ET, March 17 
+
+**What to hand in:** .Rmd or .qmd file and the compiled pdf, and any stan files
+
+**How to hand in:** Submit files via Quercus
+
+# 1. IQ 
+
+Suppose we are to sample $n$ individuals from a particular town and then estimate $\mu$, the town-specific mean IQ score, based on the sample of size $n$.
+
+Let $Y_i$ denote the IQ score for the $i^{th}$ person in the town of interest, and assume 
+
+$$Y_{1}, Y_{2}, \ldots, Y_{n} | \mu, \sigma^{2} \sim N\left(\mu, \sigma^{2}\right)$$
+
+
+For this question, will assume that the observed standard deviation of the IQ scores in the town is equal to 15, the observed mean is equal to 113 and the number of observations is equal to 10. Additionally, for Bayesian inference, the following prior will be used:
+
+$$\mu \sim N\left(\mu_{0} = 100, \sigma_{\mu_0}^{2} = 15^2\right)$$
+
+## a) Write down the posterior distribution of $\mu$ based on the information above. Give the Bayesian point estimate and a 95% credible interval of $\mu$, $\hat{\mu}_{Bayes} = E(\mu|\boldsymbol{y})$. 
+
+Let $\textbf{Y} = (Y_1, Y_2, ..., Y_{10})$. 
+
+The likelihood function is 
+
+$$f(\textbf{y}|\mu, \sigma^2) = \prod_{i = 1}^{10} (2\pi \sigma^2)^{- 1/2} e^{- \frac{(y_i - \mu)^2}{2\sigma^2}} = \frac{1}{(2\pi \sigma^2)^{5}} e^{- \frac{\sum_{i = 1}^{10} (y_i - \mu)^2}{2\sigma^2}}$$
+
+The prior function is 
+
+$$p(\mu) = \frac{1}{15\sqrt{2\pi}} e^{\frac{- (\mu - 100)^2}{2(15^2)}}$$
+
+The posterior distribution of $\mu$ is
+
+\begin{center}
+  $p(\mu|\textbf{y}, \sigma^2) = f(\textbf{y}|\mu, \sigma^2) p(\mu) \propto e^{- \frac{1}{2} \Big[\big(\frac{10}{\sigma^2} + \frac{1}{15^2}\big)\big[\mu - \big(\frac{10\overline{y}}{\sigma^2} + \frac{100}{15}\big)\big]^2\Big]}$ (Lecture 4 page 13)
+\end{center}
+
+i.e. $\mu|\textbf{y}, \sigma^2 \sim N\Big(\frac{\frac{100}{15^2} + 10 \frac{\overline{y}}{\sigma^2}}{\frac{1}{15^2} + \frac{10}{\sigma^2}}, \frac{1}{\frac{1}{15^2} + \frac{10}{\sigma^2}}\Big) \equiv N\Big(\frac{\frac{100}{15^2} + 10 \frac{113}{15^2}}{\frac{1}{15^2} + \frac{10}{15^2}}, \frac{1}{\frac{1}{15^2} + \frac{10}{15^2}}\Big) \equiv N\Big(\frac{1230}{11}, \frac{225}{11}\Big)$
+
+The Bayesian point estimate is $\hat{\mu}_{Bayes} = E(\mu|\boldsymbol{y}) = \frac{1230}{11} \approx 111.81$
+
+A 95% credible interval of $\mu$ is $E(\mu|\textbf{y}) \pm 1.96 \sqrt{Var(\mu|\textbf{y})} = \frac{1230}{11} \pm 1.96 \sqrt{\frac{225}{11}} \approx \big(102.954, 120.683\big)$ 
+
+## b) Suppose that (unknown to us) the true mean IQ score is $\mu^*$. To evaluate how close an estimator is to the truth, we might want to use the mean squared error (MSE) $\operatorname{MSE}\left[\hat{\mu} | \mu^{*}\right]=E\left[\left(\hat{\mu}-\mu^{*}\right)^{2} | \mu^{*}\right]$. Show the MSE is equal to the variance of the estimator plus the bias of the estimator squared, i.e.
+
+$$\operatorname{MSE}\left[\hat{\mu} | \mu^{*}\right]= \operatorname{Var}\left[\hat{\mu} | \mu^{*}\right]+\operatorname{Bias}\left(\hat{\mu} | \mu^{*}\right)^{2}$$
+
+$MSE(\hat{\mu} \mid \mu^{*}) = E\big[(\hat{\mu} - \mu^*)^2 \mid \mu^{*}\big]$
+
+|                   = $E\big[\hat{\mu}^2 - 2\hat{\mu}\mu^* + (\mu^*)^2 \mid \mu^{*}\big]$
+
+|                   = $E\big[\hat{\mu}^2\mid \mu^{*}\big] - 2E\big[\hat{\mu}\mu^* \mid \mu^{*}\big] + E\big[(\mu^*)^2 \mid \mu^{*}\big]$
+
+|                   = $E(\hat{\mu}^2\mid \mu^{*}) - 2\mu^*E(\hat{\mu}\mid \mu^{*}) + (\mu^*)^2$
+
+|                   = $\Big(E(\hat{\mu}^2\mid \mu^{*}) - [E(\hat{\mu}\mid \mu^{*})]^2\Big) + \Big([E(\hat{\mu}\mid \mu^{*})]^2 - 2\mu^*E(\hat{\mu}\mid \mu^{*}) + (\mu^*)^2\Big)$
+
+|                   = $Var(\hat{\mu}\mid \mu^{*}) + \big(E(\hat{\mu}\mid \mu^{*}) - \mu^*\big)^2$
+
+|                   = $Var(\hat{\mu}\mid \mu^{*}) + \big[Bias(\hat{\mu}\mid \mu^{*})\big]^2$
+
+## c) Suppose that the true mean IQ score is 112. Calculate the bias, variance and MSE of the Bayes and ML estimates. Which estimate has a larger bias? Which estimate has a larger MSE? 
+
+Let $\mu^* = 112$. 
+
+**Bias:**
+
+|   $Bias(\hat{\mu}_{Bayes}\mid \mu^{*} = 112) = E\big(\hat{\mu}_{Bayes}\mid \mu^{*}\big) - 112 = \frac{1230}{11} - 112 = \frac{2}{11} \approx 0.182$
+
+|   $Bias(\hat{\mu}_{MLE}\mid \mu^{*} = 112) = E\big(\hat{\mu}_{MLE}\mid \mu^{*}\big) - 112 = 113 - 112 = 1$
+
+**Variance:**
+
+|   $Var(\hat{\mu}_{Bayes}\mid \mu^{*} = 112) = \frac{225}{11} \approx 20.455$
+
+|   $Var(\hat{\mu}_{MLE}\mid \mu^{*} = 112) = \frac{15^2}{10} = \frac{45}{2} = 22.5$
+
+**MSE:**
+
+|   $MSE(\hat{\mu}_{Bayes}\mid \mu^{*} = 112) = Var(\hat{\mu}_{Bayes}\mid \mu^{*} = 112) + \big[Bias(\hat{\mu}_{Bayes}\mid \mu^{*} = 112)\big]^2 = \frac{2479}{121} \approx 20.488$
+
+|   $MSE(\hat{\mu}_{MLE}\mid \mu^{*} = 112) = Var(\hat{\mu}_{MLE}\mid \mu^{*} = 112) + \big[(\hat{\mu}_{MLE}\mid \mu^{*} = 112)\big]^2 = 22.5 + 1^2 = 23.5$
+
+The ML estimator resulted in higher bias, variance, and MSE than those produced by the Bayes estimator.
+
+## d) Write down the sampling distributions for the ML and Bayes estimates, again assuming $\mu^* = 112$ and $\sigma = 15$. Plot the two distributions on the one graph. Summarize your understanding of the differences in bias, variance and MSE of the two estimators by describing how these differences relate to differences in the sampling distributions as plotted. To further illustrate the point, obtain the Bayes and ML MSEs for increasing sample sizes and plot the ratio (Bayes MSE)/(ML MSE) against sample size.  
+
+**Sampling distributions for the ML and Bayes estimates (n = 10):**
+
+\begin{center}
+  $\hat{\mu}_{Bayes} \sim N\Big(\frac{1230}{11}, \frac{225}{11}\Big)$ and $\hat{\mu}_{MLE} \sim N\Big(112, \frac{15^2}{10}\Big) \equiv N(112, 22.5)$
+\end{center}
+
+In the frequentist approach, we use a point estimate $\hat{\mu}_{MLE}$ to estimate the true value of $\mu^*$. In the Bayesian approach, we get a distribution of the estimates of $\mu^*$, say $\hat{\mu}_{Bayes}$, under a prior opinion, and estimate $\mu^*$ by the expected value of $\hat{\mu}_{Bayes}$. Bias is the difference between the expected values of either estimator and $\mu^*$. Moreover, the ML estimator is unbiased (i.e. $\mu^* = E(\hat{\mu}_{MLE})$), and we see that the MSE ratio converges to 1 (i.e. $MSE_{Bayes} \to MSE_{MLE}$ ) as n increases,  implying the Bayes estimator $\hat{\mu}_{Bayes}$ is asymptotically unbiased. For a small sample size, it is hard to choose between the MLE and Bayes estimate since $\hat{\mu}_{MLE}$ is unbiased but has a larger variance than that of $\hat{\mu}_{Bayes}$, so we need the mean square error (MSE) criteria, which takes into account concerns about both bias and variance of estimators, describing the difference between the estimate and the actual parameter. Here, the difference in the sampling distributions of the two estimators results from the difference in how their estimate diverges from the true parameter.
+
+```{r, echo = FALSE}
+set.seed(10032023)
+iter = 10000
+n = 10
+
+mu_true = 112; var_true = 15^2
+mu_hat_bayes = 1230/11; var_mu_hat_bayes = 225/11
+mu_hat_MLE = mu_true; var_mu_hat_MLE = var_true/n
+
+
+bayes_sample <- rnorm(iter, mean = mu_hat_bayes, sd = sqrt(var_mu_hat_bayes))
+ML_sample <- rnorm(iter, mean = mu_true, sd = sqrt(var_mu_hat_MLE))
+
+df1 <- melt(data.frame(bayes_sample, ML_sample))
+
+ggp1 <- ggplot(df1, aes(x=value, fill=variable)) +
+          geom_density(alpha= 0.5) +
+          labs(title = expression(~Distribution ~ of ~ hat(mu)[Bayes] ~ and ~ hat(mu)[MLE]),
+               subtitle = expression(mu[true] == 112 ~ sigma[observed] == 15 ~ and ~ n == 10)) +
+          xlab(expression(hat(mu))) +
+          theme_bw() +
+          theme(legend.position="bottom")
+```
+
+```{r echo=FALSE}
+bias = function(mu_hat){
+  mu_hat - mu_true
+}
+MSE = function(var_mu_hat, bias){
+  var_mu_hat + bias^2
+}
+```
+
+```{r echo = FALSE}
+sample_size = seq(1, 13001, by = 10)
+mu_0 = 100; var_mu_0 = 15^2; y_bar = 113
+
+mu_hat_bayes <- (mu_0/var_mu_0 + sample_size*y_bar/var_true)/(1/var_mu_0 + sample_size/var_true)
+var_mu_hat_bayes <- 1/(1/var_mu_0 + sample_size/var_true)
+bias_bayes <- bias(mu_hat_bayes)
+MSE_bayes <- MSE(var_mu_hat_bayes, bias_bayes)
+
+mu_hat_MLE = y_bar
+var_mu_hat_MLE <- var_true/sample_size
+bias_MLE <- bias(mu_hat_MLE)
+MSE_MLE <- MSE(var_mu_hat_MLE, bias_MLE)
+
+MSE_ratio = MSE_bayes/MSE_MLE
+
+df2 <- data.frame(sample_size, MSE_bayes, MSE_MLE, MSE_ratio)
+
+ggp2 <- df2 |> ggplot(aes(x = sample_size, y = MSE_ratio)) + 
+               geom_point() +
+               theme_bw() +
+               xlab("Sample size") +
+               ylab("MSE ratio") +
+               labs(title = "MSE ratio (Bayes MSE)/(ML MSE) against sample size")
+```
+
+```{r echo=FALSE}
+require(gridExtra)
+grid.arrange(ggp1, ggp2, ncol = 2)
+```
+
+\newpage
+
+# 2. Gompertz
+
+Gompertz hazards are of the form
+
+$$\mu_x = \alpha e^{\beta x}$$
+
+for $x \in [0, \infty)$ with $\alpha, \beta>0$. It is named after Benjamin Gompertz, who suggested a similar form to capture a 'law of human mortality' in 1825. 
+
+This question uses data on deaths by age in Sweden over time. The data are in the `sweden` file in the class repo. I grabbed the data from the [Human Mortality Database](https://mortality.org/). We will assume that the deaths we observe in a particular age group are Poisson distributed with a rate equal to the mortality rate multiplied by the population, i.e.
+
+$$D_x \sim \text{Poisson}(\mu_xP_x)$$
+
+where $x$ refers to age. In this question we will be estimating mortality rates using the Gompertz model as described above. 
+
+## a) Describe, with the aid of a couple of graphs, some key observations of how mortality above age 50 in Sweden has changed over time. 
+
+```{r echo=FALSE}
+sweden_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/HW2/sweden.csv")
+sweden_df <- sweden_df |> mutate(Age = as.character(age),
+                                 Year = as.character(year),
+                                 age_group = case_when(age <= 64 ~ 'aged 50-64',
+                                                       age >= 65 & age < 80 ~ 'aged 66-74',
+                                                       age >= 80 & age < 95 ~ 'aged 80-94',
+                                                       age >= 95 ~ 'aged 95+')) |>
+                          group_by(year) |>
+                          mutate(mortality_rate_by_year = sum(deaths)/sum(pop),
+                                 age_centered = age - mean(age))|>
+                          group_by(Age) |>
+                          mutate(mortality_rate_by_age = deaths/pop)
+sweden_grouped <- sweden_df |> group_by(Year, age_group) |> mutate(sum_deaths = sum(deaths))
+```
+
+```{r echo=FALSE}
+ggp3 <- sweden_df |> select(year, mortality_rate_by_year) |>
+                     distinct() |>
+                     ggplot(aes(x = year, y = mortality_rate_by_year)) + 
+                            geom_point(color = "darkblue", size = 3) + 
+                            stat_smooth(color = "#FC4E07", 
+                                        fill = "darkolivegreen1", 
+                                        method = "loess")+
+                            theme_minimal() +
+                            xlab("Year") + 
+                            ylab("Mortality rates") +
+                            labs(title = "Figure 1",
+                                 subtitle = "Starting levels of mortality rates in Sweden from 1990 to 2020")
+ggp4 <- sweden_df |> ggplot(aes(x = age, y = mortality_rate_by_age, color = Year)) +
+                             geom_point() +
+                             geom_smooth()+
+                             ylab("Mortality rate") + 
+                             labs(title = "Figure 2",
+                                  subtitle = "Mortality rates across ages from 1990 to 2020") +
+                             theme_minimal() +
+                             theme(legend.position = "none") 
+ggp5 <- sweden_df  |> ggplot(aes(x = age, y = deaths, color = Year)) +
+                             geom_point() +
+                             geom_smooth(se = FALSE) +
+                             ylab("Mortality rate") + 
+                             labs(title = "Figure 3",
+                                  subtitle = "Observed death tolls in Sweden from 1990 to 2020") +
+                             theme_minimal() +
+                             theme(legend.position = "none") 
+ggp6 <- sweden_grouped |> ggplot(aes(fill=age_group, y=sum_deaths, x=year)) + 
+                                 geom_bar(position="stack", stat="identity") +
+                                 labs(title = "Figure 4",
+                                      subtitle = "Observed death tolls by age in Sweden from 1990 to 2020") +
+                                 ylab("Death counts") +
+                                 labs(fill = "Age groups")
+require(gridExtra)
+grid.arrange(ggp3, ggp4, ggp5, ggp6, nrow = 2, ncol = 2)                                 
+```
+
+The starting levels of mortality rates in Sweden appear to have declined sharply from 1990 to 2020, except for 2020, when we observed the first spike in the mortality rate over the 31-year period, which we could attribute to the emergence of COVID-19. Also, mortality rates of older people were higher and varied in greater variation between years than those of their respective younger demographic groups. We also note that most Swedish residents passed away between 75 and 85 years old, as indicated by the steep climb in mortality rate in Figure 3, and people aged $80+$ were the most vulnerable to the pandemic, as evidenced by the drastic shift in death tolls between 2019 and 2020 in Figure 4.
+
+## b) Carry out prior predictive checks for $\alpha$ and $\beta$, based on populations by age in Sweden in 2020. Summarize what you find and what you decide to be weakly informative priors for these parameters.
+
+In the Gompertz model, parameter $\alpha$ characterizes how the starting level of mortality rate (i.e. mortality rate at age 50) changes over time while the parameter $\beta$ captures the increase in mortality rate over age. Graphically, we see the starting level of mortality rate decreases over time (Figure 1), so we place a Half-normal(0.5, $0.002^2$) prior on parameter $\alpha$, i.e. we believe the mortality rate of Swedish residents aged 50 decreased by about $50\%$ over the period between 1990 and 2020. Also, as seen in Figure 2, we believe that the rate of mortality increases over age by $3\%$ for every unit increment in age and put Half-normal(0.03, $0.0055^2$) prior on the parameter $\beta$. Prior predictive checks justified that the two weakly informative priors on $\alpha$ and $\beta$ induce relatively similar behavior in simulated data to collected data (i.e. the spike in death counts among populations aged between 75 and 85, followed by a drop in death counts among the 85+ residents.) 
+
+```{r echo=FALSE}
+sweden_2020 <- sweden_df |> filter(year == 2020)
+```
+
+```{r echo=FALSE}
+set.seed(10032023)
+iter = 500
+alpha = abs(rnorm(iter, mean = 0.5, sd = 0.002))
+beta = abs(rnorm(iter, mean = 0.03, sd = 0.0055))
+sim_df = data.frame(age = sweden_2020$age, 
+                    observed_MR = sweden_2020$mortality_rate_by_age)
+for(i in 1:iter){
+    simulated_MR <- alpha[i]*exp(beta[i]*sweden_2020$age_centered)*sweden_2020$deaths
+    sim_df[paste0(i)] <- simulated_MR
+}
+dsl <- sim_df |> pivot_longer(`250`:`500`, names_to = "sample", values_to = "simulated_MR") |>
+                 mutate(sample = as.character(sample))
+```
+
+```{r echo=FALSE}
+ggp7 <- dsl |> ggplot(aes(x = age, y = simulated_MR, color = sample)) +
+                           geom_point(color = "darkolivegreen4") +
+                           geom_smooth() +
+                           ylab("Death count") + 
+                           labs(title = "Figure 5",
+                                subtitle = "Simulated and Observed death tolls (purple)") +
+                           theme_minimal() +
+                           theme(legend.position = "none") +
+                           geom_smooth(data = sweden_2020, aes(x = age, y = deaths), 
+                                     color = "darkorchid3", linewidth = 2) +
+                           geom_vline(xintercept = 75) + geom_vline(xintercept = 85)
+ggp8 <- sweden_2020 |> ggplot(aes(x = age, y = pop)) +
+                              geom_point() + 
+                              geom_smooth(se = FALSE, color = "deeppink4") +
+                              theme_minimal() +
+                              ylab("Population size") +
+                              labs(title = "Figure 6", subtitle = "Population sizes across age") +
+                              geom_vline(xintercept = 76) + geom_vline(xintercept = 85) 
+require(gridExtra)
+grid.arrange(ggp7, ggp8, nrow = 1, ncol = 2)
+```
+
+## c) Fit a model in Stan to estimate $\alpha$ and $\beta$ for the year 2020. Note that it may be easier to specify the likelihood on the log scale (you can do this in Stan using the `poisson_log` function). Priors should be informed by your prior predictive checks and any other information available. Ensure that the model has converged and other diagnostics are good. Interpret your estimates for $\alpha$ and $\beta$.
+
+**Likelihood:** Y $\sim$ Poisson($\eta$) where $\eta = \alpha P_x e^{\beta x} = e^{\beta x + log(\alpha P_x)}$ and $P_x$ is population aged x 
+
+**Priors:** $\alpha \sim N^+(0.5, 0.002^2)$ and $\beta \sim N^+(0.03, 0.0055^2)$
+
+```{r echo=FALSE}
+sim_iter1 = 1000
+warmups1 = sim_iter1/2
+n_chain1 = 5
+stan_df1 <- list(N = nrow(sweden_2020),
+                 X = sweden_2020$age_centered,
+                 P = sweden_2020$pop, 
+                 y = sweden_2020$deaths)
+```
+
+```{r echo=FALSE}
+stan_mod1 <- stan(file = here("C:/QV/STA 2201/STA2201-W2023/HW2/sweden_2020.stan"), data = stan_df1, 
+                  chains = n_chain1, iter = sim_iter1, warmup = warmups1, refresh = 0)
+pars <- c("alpha", "beta")
+summary(stan_mod1)[["summary"]][pars,]
+```
+
+Since $\hat{R}$ < 1.05 and effective sample size $n_{eff}$ > 100 for the estimates of $\alpha$ and $\beta$, the model converged.  Here, we found that centering the ``age`` covariate reduced correlation between chains and improved the efficiency of MCMC sampling (i.e. the model converged relatively fast). Model convergence can also be shown using the ``pairs`` plot.
+
+```{r echo=FALSE}
+#print(get_elapsed_time(stan_mod1))
+pairs(stan_mod1, pars = pars)
+```
+
+The Gompertz model with Half-normal priors on $\alpha$ and $\beta$ estimates that the starting level of mortality rate decreased by about 2.79\% from 2019 to 2020 (i.e. the proportion of Swedish aged 75 passed away in 2020 is 2.79\% lower than that in 2019), and the mortality rate increased by roughly $e^{0.11739472} - 1 \approx$ 12.45\% for every unit increment in age in 2020. Performing visual inspection of the trace plots of $\alpha$ and $\beta$, we observed random scatter around mean values, suggesting that the chains mixed well and converged toward the target distributions.
+
+```{r echo=FALSE}
+traceplot(stan_mod1, pars = pars)
+```
+
+## d) Carry out some posterior predictive checks to assess model performance.  
+
+```{r echo=FALSE}
+y <- sweden_2020$deaths
+yrep1 <- extract(stan_mod1)[["y_rep"]]
+samp100 <- sample(nrow(yrep1), 100)
+```
+
+**Graphical posterior predictive checks (PPCs):**
+
+In the plot below, the dark line is the distribution of the observed death tolls, and each of the 100 lighter purple lines is the kernel density estimate of one of the replications of death tolls from the posterior predictive distribution. It is easy to see that the model underestimates death tolls of less than about 2600 and overestimates the counterpart, i.e. the model fails to account for variations in death tolls and population sizes between different age groups. To be more specific, the mortality rate that we are trying to model is the fraction of the death count to the population size at a point in time of a particular age, and here the spike in death tolls, alongside the plunge in size between populations aged less than 65 and those aged between 66 to 85 (Figures 5 and 6), was not fully captured by the Gompertz hazards. 
+
+Another way to see this is to look at the distributions of the median of the replicated data sets over four age groups from the posterior predictive distribution and compare them with that of the observed death tolls. The histograms below indicate that the predicted median death tolls, compared to the observed median death tolls of the respective age groups, are higher for the population aged above 66 and lower for the counterpart. 
+
+```{r echo=FALSE}
+color_scheme_set("purple")
+ppc_dens_overlay(y, yrep1[samp100, ]) 
+```
+
+```{r echo=FALSE}
+color_scheme_set("purple")
+ppc_stat_grouped(y, yrep1, group = sweden_2020$age_group, stat = "median")
+```
+
+**Leave-One-Out Cross-Validation (LOO-CV):**
+
+The PSIS diagnostic plot indicates no influential points as none of the Pareto k estimates exceeds 0.7, suggesting the Monte Carlo sampling yields stable estimates for Swedish death tolls in 2020 with relatively small variance and bias, thus the LOO predictive distribution for point i does not deviate from the full predictive distribution.
+
+```{r echo=FALSE}
+loglik1 <- extract(stan_mod1)[["log_lik"]]
+loo1 <- loo(loglik1, save_psis = TRUE)
+lw <- weights(loo1$psis_object)
+psis1 <- loo1$psis_object
+k_pareto_mod1 <- loo1$diagnostics$pareto_k 
+k_pareto_mod1 <- data.frame(age = sweden_2020$age, k_pareto_mod1) |>
+                 filter(k_pareto_mod1 >= 0.5) |>
+                 rename("Pareto k estimates" = k_pareto_mod1) 
+#k_pareto_mod1
+```
+
+```{r echo=FALSE}
+plot(loo1)
+```
+
+**Leave-One-Out Probability Integral Transform (LOO-PIT):**
+
+Examining the probabilities that the posterior predicted data $\tilde{y}$ has a lower value than the observed data $y_i$ when we remove the i observation, say $p_i = p(\tilde{y} \leq y_i |y_{-i})$, we see the model is not very well calibrated for the sample of the year 2020 as there is more observed data than expected for both low and high values. This might be due to a small sample size of the data set. The QQ-plot of $p_i$ has few data points at both ends deviating from the straight line while its center aligns with the straight line, making $p_i$'s approximately normally distributed. Figure 9 and 10 also illustrate that the model death toll estimates for residents aged 66 to 85 are flawed as the observed data point is not contained inside or located close by either endpoints of the predictive interval for those ages.
+
+```{r echo=FALSE}
+color_scheme_set("viridis")
+ggp9 <- ppc_loo_pit_overlay(yrep = yrep1, y = sweden_2020$deaths, lw = lw) + 
+        ggtitle("Figure 7: LOO-PIT")
+ggp10 <- ppc_loo_pit_qq(yrep = yrep1, y = sweden_2020$deaths, lw = lw, compare = "normal") +
+         ggtitle(expression(Figure ~ 8 ~ Quantile-~Quantile ~ plot ~ of ~ p[i] == p(tilde(y) <= y[i] | y_[-i])))
+ggp11 <- ppc_loo_intervals(yrep = yrep1, y = sweden_2020$deaths, psis_object = psis1, 
+                           subset = c(1:length(sweden_2020$deaths))) +
+         ggtitle("Figure 9: LOO predictive intervals vs observations")
+ggp12 <- ppc_scatter_avg(yrep = yrep1, y = sweden_2020$deaths) +
+         ggtitle("Figure 10: Prediction per datapoint vs the Observed value for each datapoint")
+require(gridExtra)
+grid.arrange(ggp9, ggp10, ggp11, ggp12, nrow = 2, ncol = 2)
+```
+
+```{r echo=FALSE}
+stan_mod1_mcmc <- stan_mod1 |>rstan::extract()
+stan_mod1_pars <- stan_mod1_mcmc[ c('alpha','beta')] |> map_df(as_data_frame, .id = 'parameter')
+stan_mod1_pars |> ggplot(aes(value, fill = parameter)) + 
+                         geom_density() + 
+                         facet_wrap(~parameter, scales = 'free') + 
+                         coord_flip() +
+                         theme_minimal()
+```
+
+## e) Now extend your model to estimate $\alpha$ and $\beta$ in every year over the interval 1990-2020. Plot the resulting point estimates and 95% credible intervals for your estimates of $\alpha$ and $\beta$ over time. Comment briefly on what you observe. 
+
+```{r echo=FALSE}
+year <- sweden_df |> subset(select = c(year)) |> distinct()
+age_centered <- sweden_df |> subset(select = c(age_centered)) |> distinct() 
+Age_centered <- cbind(age_centered, rep(age_centered[1], nrow(year) - 1)) |> as.matrix()
+pop <- sweden_df |> subset(select = c(pop)) |> as.matrix()
+pop <- matrix(pop, ncol = nrow(year))
+deaths <- sweden_df |> subset(select = c(deaths)) |> as.matrix()
+deaths <- matrix(deaths, ncol = nrow(year)) |> as.data.frame()
+sim_iter2 = 1000
+warmups2 = sim_iter2/2
+n_chain2 = 6
+```
+
+```{r echo=FALSE}
+stan_df2 <- list(N = nrow(age_centered), M = nrow(year), 
+                 X = Age_centered, P = pop, y = deaths)
+stan_mod2 <- stan(file = here("C:/QV/STA 2201/STA2201-W2023/HW2/sweden_allyears.stan"), data = stan_df2, 
+                  chains = n_chain2, iter = sim_iter2, warmup = warmups2, refresh = 0)
+#print(get_elapsed_time(stan_mod2))
+summary(stan_mod2)[["summary"]][c(paste0("alpha[",1:31, "]"), paste0("beta[",1:31, "]")),]
+```
+
+```{r echo=FALSE}
+traceplot(stan_mod2, pars = c("alpha[1]", "alpha[10]", "alpha[20]", "alpha[30]",
+                              "beta[1]", "beta[10]", "beta[20]", "beta[30]"), ncol = 4)
+```
+
+Examining trace plots of some representative point estimates of $\alpha$ and $\beta$, we see all chains mixed well, and there are no divergences across all chains during the sampling period. 
+
+```{r echo=FALSE}
+stan_mod2_diagnostics <- rstan::get_sampler_params(stan_mod2) |> 
+                         set_names(1:n_chain2)|> 
+                         map_df(as_data_frame,.id = 'chain') |> 
+                         group_by(chain) |> 
+                         mutate(iteration = 1:length(chain)) |> 
+                         mutate(warmup = iteration <= warmups2)
+stan_mod2_diagnostics |> group_by(warmup, chain) |>
+                         summarise(percent_divergent = mean(divergent__ >0)) |> 
+                         ggplot() +
+                            geom_col(aes(chain, percent_divergent, fill = warmup), 
+                                     position = 'dodge', color = 'black') + 
+                            scale_y_continuous(labels = scales::percent, 
+                                               name = "% Divergent Runs") +
+                            theme_minimal()
+```
+
+The point estimates of $\alpha$ declined over time, similar to the trend of starting levels of mortality rates in Sweden in Figure 1, whereas the point estimates of $\beta$ increased by about 13\% between 1990 and 2020, suggesting the rate at which mortality rate increased given one unit increment in age increased over the period of 1990-2020. The 95\% credible intervals for all point estimates of $\alpha$ and $\beta$ interpreted as the interval for which there is a 95% probability the true values of $\alpha$ and $\beta$ lie, are small, indicating it is with low uncertainty that the point estimates yielded by MCMC are flawed.
+
+```{r echo=FALSE}
+stan_mod2_summary <- summary(stan_mod2)$summary |> 
+                     as.data.frame() |> 
+                     select(c("mean", "se_mean", "2.5%", "97.5%"))
+stan_mod2_posterior <- data.frame(year,
+                                  alpha = stan_mod2_summary[1:31, 1],
+                                  alpha_lower = stan_mod2_summary[1:31, 3],
+                                  alpha_upper = stan_mod2_summary[1:31, 4],
+                                  beta = stan_mod2_summary[32:62,1]  , 
+                                  beta_lower = stan_mod2_summary[32:62, 3], 
+                                  beta_upper = stan_mod2_summary[32:62, 4])
+```
+
+```{r echo=FALSE}
+ggp13 <- stan_mod2_posterior |> ggplot(aes(x = year, y = alpha)) +
+                                 geom_point(color = "deeppink4") +
+                                 geom_ribbon(aes(year, ymin = alpha_lower, ymax = alpha_upper), 
+                                             color = "darksalmon", alpha = 0.1) +
+                                 ylab(expression(Point ~ estimates ~ of ~ alpha)) +
+                                 theme_minimal() +
+                                 ggtitle("Point estimates and 95% credible intervals")
+ggp14 <- stan_mod2_posterior |> ggplot(aes(x = year, y = beta)) +
+                                  geom_point(color = "deepskyblue4") +
+                                  geom_ribbon(aes(year, ymin = beta_lower, ymax = beta_upper), 
+                                              color = "deepskyblue", alpha = 0.1) +
+                                  ylab(expression(Point ~ estimates ~ of ~ beta)) +
+                                  theme_minimal()
+require(gridExtra)
+grid.arrange(ggp13, ggp14, ncol = 2) 
+```
+
+## f) Life expectancy at age $x$ is defined as 
+
+$$\int_x^{\omega} e^{-\mu_a}da$$
+
+where $\omega$ is the oldest age group (you may assume this is age 100). Life expectancy is the expected number of years of life left at age $x$. The integral can be approximated by summing over discrete age groups. Based on your estimates in the previous question, estimate life expectancy at age 40 (note starting age!) for every year from 1990-2020. Plot your resulting point estimates and 95% credible intervals over time and comment briefly. 
+
+The overall life expectancy of Swedish residents aged 40 is estimated to have increased by 1.5 years between 1990 and 2019, which tailed off for about 0.3 years in 2020 due to the pandemic.
+
+```{r echo=FALSE}
+get_life_expectancy <- function(x, omega, year_index) {
+   x_i <- x:omega-75
+   mu_x <- stan_mod2_posterior[year_index, 2]*exp(stan_mod2_posterior[year_index, 5]*x_i)
+   sum(exp(- mu_x))
+}
+get_LE_LB <- function(x, omega, year_index) {
+   x_i <- x:omega-75
+   LB_mu_x <- stan_mod2_posterior[year_index, 3]*exp(stan_mod2_posterior[year_index, 6]*x_i)
+   sum(exp(- LB_mu_x))
+}
+get_LE_UB <- function(x, omega, year_index) {
+   x_i <- x:omega-75
+   UB_mu_x <- stan_mod2_posterior[year_index, 4]*exp(stan_mod2_posterior[year_index, 7]*x_i)
+   sum(exp(- UB_mu_x))
+}
+```
+
+```{r echo=FALSE}
+life_expectancy_age_40 <- data.frame(year)
+for(i in 1:nrow(year)){
+  new_LE_40 <- get_life_expectancy(x = 40, omega = 100, year_index = i)
+  new_LB_40 <- get_LE_LB(x = 40, omega = 100, year_index = i)
+  new_UB_40 <- get_LE_UB(x = 40, omega = 100, year_index = i)
+  
+  life_expectancy_age_40[i, 2] <- new_LE_40 
+  life_expectancy_age_40[i, 3] <- new_LB_40 
+  life_expectancy_age_40[i, 4] <- new_UB_40 
+}
+life_expectancy_age_40 <- life_expectancy_age_40 |> rename(LE = V2, UB = V3, LB = V4)
+```
+
+```{r echo=FALSE}
+life_expectancy_age_40 |> ggplot(aes(x = year, y = LE)) +
+                                 geom_point(color = "royalblue4", alpha = 1) + 
+                                 geom_ribbon(aes(year, ymin = LB, ymax = UB), 
+                                              color = "violet", fill = "darksalmon", alpha = 0.2)+
+                                 ylab("Life expectancy") + 
+                                 labs(title = "Estimated life expectancy of age 40 and 95% credible intervals over time")+
+                                 theme_minimal() 
+```
+
+\newpage
+
+# 3. Wells This question uses data looking at the decision of households in Bangladesh to switch drinking water wells in response to their well being marked as unsafe or not. A full description from the Gelman Hill text book (page 87): 
+
+*"Many of the wells used for drinking water in Bangladesh and other South Asian countries are contaminated with natural arsenic, affecting an estimated 100 million people. Arsenic is a cumulative poison, and exposure increases the risk of cancer and other diseases, with risks estimated to be proportional to exposure. Any locality can include wells with a range of arsenic levels. The bad news is that even if your neighbors well is safe, it does not mean that yours is safe. However, the corresponding good news is that, if your well has a high arsenic level, you can probably find a safe well nearby to get your water from if you are willing to walk the distance and your neighbor is willing to share. [In an area of Bangladesh, a research team] measured all the wells and labeled them with their arsenic level as well as a characterization as safe (below 0.5 in units of hundreds of micrograms per liter, the Bangladesh standard for arsenic in drinking water) or unsafe (above 0.5). People with unsafe wells were encouraged to switch to nearby private or community wells or to new wells of their own construction. A few years later, the researchers returned to find out who had switched wells."*
+
+The outcome of interest is whether or not household $i$ switched wells:
+
+$$ y_{i}=\left\{\begin{array}{ll}1 & \text { if household } i \text { switched to a new well } \\ 0 & \text { if household } i \text { continued using its own well. }\end{array}\right. $$
+
+The data we are using for this question are here: http://www.stat.columbia.edu/~gelman/arm/examples/arsenic/wells.dat and you can load them in directly using `read_table`.
+
+The variables of interest for this questions are 
+
+- `switch`, which is $y_i$ above
+- `arsenic`, the level of arsenic of the respondent's well
+- `dist`, the distance (in metres) of the closest known safe well
+
+```{r echo=FALSE}
+well_df <- read.table("http://www.stat.columbia.edu/~gelman/arm/examples/arsenic/wells.dat")
+well_df <- data.frame(household_ix = 1:nrow(well_df), well_df) |>
+           mutate(switch_well = case_when(switch == 0 ~ 'no', TRUE ~ 'yes'),
+                  arsentic_safety = case_when(arsenic <= 0.5 ~ 'safe', TRUE ~ 'unsafe'),
+                  arsenic_c = arsenic - mean(arsenic),
+                  dist_c = dist - mean(dist), 
+                  log_arsenic_c = log(arsenic) - mean(log(arsenic))) |>                      
+           group_by(switch_well) |>
+           mutate(arsenic_avg = mean(arsenic),
+                  group_dist_avg = mean(dist))
+```
+
+## a) Do an exploratory data analysis illustrating the relationship between well-switching, distance and arsenic. Think about different ways of effectively illustrating the relationships given the binary outcome. As usual, a good EDA includes well-thought-out descriptions and analysis of any graphs and tables provided, well-labelled axes, titles etc. 
+
+```{r echo=FALSE}
+tab1 <- prop.table(xtabs(~ switch_well + arsentic_safety, data = well_df))
+tab1
+```
+
+First, we note that the distributions of `dist` and `arsenic` are skewed, so we log transformation might be necessary to reduce the skewness of measurement variables. Performing EDA, we noticed that, given all wells in the study are unsafe, the longer the distance Bengalis had to commute to the safer well, the less willing they were to switch. Also, on average, the average distance households that didn't switch to safer wells would have to commute is 9.1793 meters longer, while the arsenic level in wells used by them is only 0.411839 units of hundreds of micrograms per litre lower. The finding is that long-distance commutes and seemingly lower arsenic levels compared to that in wells used by other households discouraged about 42.5\% of Bengali households from switching to safer wells, even though long-term exposure to arsenic from drinking water can lead to accumulation of toxicity. It is also noteworthy that, from Figure 6, we observed the households that used the most arsenic-contaminated wells were also the farthest from a safe well. 
+
+```{r echo=FALSE}
+ggp1 <- well_df |> ggplot(aes(x = dist)) + 
+                    geom_density(lwd = 1, colour = "lightpink2", 
+                                 fill = "lightpink2", alpha = 0.25) +
+                    theme_minimal() + xlab("Distance") + 
+                    labs(title = "Figure 1", subtitle = "Distribution of distance")
+ggp2 <- well_df |> ggplot(aes(x = arsenic)) + 
+                    geom_density(lwd = 1, colour = "lightpink2", 
+                                 fill = "lightpink2", alpha = 0.25) +
+                    theme_minimal() + xlab("Arsenic level") + 
+                    labs(title = "Figure 2", subtitle = "Distribution of arsenic level")
+ggp6 <- well_df |> ggplot(aes(y = dist, x = log(arsenic), color = switch_well)) +
+                           geom_point() +
+                           geom_smooth(method = "lm", color = "mediumpurple4") + 
+                           theme_minimal() + 
+                           ylab("Distance") +
+                           xlab("Arsenic level") +
+                           labs(title = "Figure 6", subtitle = "Distance by Arsenic level")
+ggp4 <- well_df |> ggplot(aes(switch_well, dist)) +
+                           geom_boxplot(outlier.shape = NA)+ 
+                           xlab("switched well") + ylab("Distance")+ 
+                           labs(title = "Figure 4")+ 
+                           stat_summary(fun.y="mean",color="lightpink2", shape=13)+
+                           theme_minimal()
+ggp5 <- well_df |> ggplot(aes(switch_well, arsenic)) +
+                           geom_boxplot(outlier.shape = NA)+ 
+                           stat_summary(fun.y="mean",color="lightpink2", shape=13)+
+                           xlab("switched well") + 
+                           ylab("Arsenic level") + 
+                           labs(title = "Figure 5")+
+                           theme_minimal()         
+ggp3 <- well_df |> ggplot(aes(x = switch_well)) +
+                           geom_bar(fill = "lightpink2", width =  0.7)+ 
+                           coord_flip()+
+                           xlab("switched well") + 
+                           ylab("Number of observations") + 
+                           labs(title = "Figure 3", subtitle = "Households")+
+                           theme_minimal()         
+require(gridExtra)
+grid.arrange(ggp1, ggp2, ggp3, ggp4, ggp5, ggp6, ncol = 3, nrow = 2)
+```
+
+## b) Fit both of these models using Stan. Put $N(0,1)$ priors on all the $\beta$s. You should generate pointwise log likelihood estimates (to be used in later questions), and also samples from the posterior predictive distribution (unless you'd prefer to do it in R later on). For model 1, interpret each coefficient. 
+
+Assume $y_i \sim Bern(p_i)$, where $p_i$ refers to the probability of switching. Consider two candidate models.
+
+**Model 1:** 
+
+$$\operatorname{logit}\left(p_{i}\right)=\beta_{0}+\beta_{1} \cdot\left(d_{i}-\bar{d}\right)+\beta_{2} \cdot\left(a_{i}-\bar{a}\right)+\beta_{3} \cdot\left(d_{i}-\bar{d}\right)\left(a_{i}-\bar{a}\right)$$
+
+```{r, echo = FALSE}
+stan_df3 <- list(N = nrow(well_df), K = 4, dist_c = well_df$dist_c, 
+                 arsenic_c = well_df$arsenic_c,
+                 y = well_df$switch)
+n_chain3 = 5
+sim_iter3 = 1000
+warmups3 = sim_iter3/2
+```
+
+```{r echo=FALSE}
+well_stan1 <- stan(file = here("C:/QV/STA 2201/STA2201-W2023/HW2/well_mod1.stan"), data = stan_df3, 
+                   chains = n_chain3, iter = sim_iter3, warmup = warmups3, refresh = 0)
+tab2 <- summary(well_stan1)[["summary"]][c(paste0("beta[",1:4, "]")),]; tab2
+```
+
+**Interpretation:**
+
+  * $\hat{\beta}_0 \approx 0.35$: Any households whose well was contaminated by an average arsenic level (i.e. $a_i - \overline{a} = 0$) and lived an average distance to a safe well (i.e. $d_i - \overline{d} = 0$) had a $\frac{e^{0.35}}{1 + e^{0.35}} \approx$ 58\% probability of switching, or equivalently, had the odds of switching of such households was about 1.42.
+  
+  * $\hat{\beta}_1 \approx -0.0088$: For any households whose well was contaminated by the average arsenic level (i.e. $a_i - \overline{a} = 0$), for a one-meter increase (or decrease) in its distance to the safe, we expect to see about $e^{0.0088} - 1 \approx 0.88\%$ decrease (or increase) in the odds of switching.
+  
+  * $\hat{\beta}_2 \approx 0.4699$ For any households that lived an average distance to a safe well (i.e. $d_i - \overline{d} = 0$), for a one-unit increase (or decrease) in arsenic level, we expect to see about $e^{0.4699} - 1 \approx 60\%$ increase (or decrease) in the odds of switching.
+  
+  * $\hat{\beta}_3 \approx -0.0017$: The interaction term reflects the effect of distance on the odds, or probability of switching, as arsenic levels vary. Here, for each arsenic level, below average (0.71), average (1.65693), and above average (3.28), the effect of distance on the odds, or probability of switching, decreases as distance increases.
+
+```{r echo=FALSE}
+tab3 <- data.frame(values = c("below average distance", "", "",
+                              "average distance", "", "",
+                              "above average distance", "", ""),
+                   distance = c(16.8, 16.8, 16.8,
+                            mean(well_df$dist), mean(well_df$dist), mean(well_df$dist),
+                            80.7, 80.7, 80.7),
+                   arsenic = c(0.71, mean(well_df$arsenic), 3.28,
+                               0.71, mean(well_df$arsenic), 3.28,
+                               0.71, mean(well_df$arsenic), 3.28))
+tab3
+```
+
+**Model 2:**
+
+$$\begin{aligned} \operatorname{logit}\left(p_{i}\right)=& \beta_{0}+\beta_{1} \cdot\left(d_{i}-\bar{d}\right)+\beta_{2} \cdot\left(\log \left(a_{i}\right)-\overline{\log (a)}\right) \\ 
+&+\beta_{3} \cdot\left(d_{i}-\bar{d}\right)\left(\log \left(a_{i}\right)-\overline{\log (a)}\right)
+\end{aligned}$$
+
+where $d_i$ is distance and $a_i$ is arsenic level. 
+
+```{r, echo = FALSE}
+stan_df4 <- list(N = nrow(well_df), K = 4, dist_c = well_df$dist_c, 
+                 log_arsenic_c = well_df$log_arsenic_c, y = well_df$switch)
+n_chain4 = 5
+sim_iter4 = 1000
+warmups4 = sim_iter4/2
+```
+
+```{r echo=FALSE}
+well_stan2 <- stan(file = here("C:/QV/STA 2201/STA2201-W2023/HW2/well_mod2.stan"), data = stan_df4, 
+                   chains = n_chain4, iter = sim_iter4, warmup = warmups4, refresh = 0)
+summary(well_stan2)[["summary"]][c(paste0("beta[",1:4, "]")),]
+```
+
+## c) Let $t(\boldsymbol{y})=\sum_{i=1}^{n} 1\left(y_{i}=1, a_{i}<0.82\right) / \sum_{i=1}^{n} 1\left(a_{i}<0.82\right)$ i.e. the proportion of households that switch with arsenic level less than 0.82. Calculate $t(\boldsymbol{y^{rep}})$ for each replicated dataset for each model, plot the resulting histogram for each model and compare to the observed value of $t(\boldsymbol{y})$. Calculate $P\left(t\left(\boldsymbol{y}^{r ep}\right)<t(\boldsymbol{y})\right)$ for each model. Interpret your findings. 
+
+```{r echo=FALSE}
+stat_prop <- function(y){
+  arsenic_ix <- which(well_df$arsenic < 0.82) 
+  y_ix = which(y == 1) 
+  length(intersect(arsenic_ix, y_ix))/length(arsenic_ix)
+}
+```
+
+```{r echo=FALSE}
+t_y <- stat_prop(well_df$switch)
+# Model 1
+yrep1 <- extract(well_stan1)[["yrep"]] |> as.data.frame() |> t() |> as.data.frame()
+trep1 = NULL
+for(i in 1:ncol(yrep1)){
+  trep1[i] <- stat_prop(yrep1[, i])
+}
+# Model 2
+yrep2 <- extract(well_stan2)[["yrep"]] |> as.data.frame() |> t() |> as.data.frame()
+trep2 = NULL
+for(i in 1:ncol(yrep2)){
+  trep2[i] <- stat_prop(yrep2[, i])
+}
+```
+
+The predicted proportion of households whose wells were contaminated by arsenic levels less than 0.82 switched to safer wells yielded by Model 1 is very close to 0, whereas about 28\% by Model 2, i.e. the predicted proportion yielded by Model 1 is way too high, so Model 2 is preferred here.
+
+  * Model 1: $P\left(t\left(\boldsymbol{y}^{rep}\right)<t(\boldsymbol{y})\right) = 0.0052$
+  
+  * Model 2: $P\left(t\left(\boldsymbol{y}^{rep}\right)<t(\boldsymbol{y})\right) = 0.2612$
+
+```{r echo=TRUE}
+stat_compare <- function(y, t){
+  mean(y < t)
+}
+stat_compare(trep1, t_y)
+stat_compare(trep2, t_y)
+```
+
+```{r echo=FALSE}
+t_rep_df <- data.frame(trep1, trep2)
+ggp21 <- t_rep_df |> ggplot(aes(x=trep1)) +
+                      geom_histogram(aes(fill = "replicated")) + 
+                      geom_vline(aes(xintercept = t_y, color = "observed"), lwd = 1.5) + 
+                      ggtitle("Model 1") + xlab("")+
+                      theme_bw(base_size = 16) + 
+                      scale_color_manual(name = "", 
+                                         values = c("observed" = "mediumorchid4"))+
+                      scale_fill_manual(name = "", 
+                                        values = c("replicated" = "lightpink")) +
+                      theme(legend.position = "bottom")
+ggp22 <- t_rep_df |> ggplot(aes(x=trep2)) +
+                      geom_histogram(aes(fill = "replicated")) + 
+                      geom_vline(aes(xintercept = t_y, color = "observed"), lwd = 1.5) + 
+                      ggtitle("Model 2") + xlab("")+
+                      theme_bw(base_size = 16) + 
+                      scale_color_manual(name = "", 
+                                         values = c("observed" = "mediumorchid4"))+
+                      scale_fill_manual(name = "", 
+                                        values = c("replicated" = "lightpink"))+
+                      theme(legend.position = "bottom")
+require(gridExtra)
+grid.arrange(ggp21, ggp22, ncol = 2)
+```
+
+## d) Use the `loo` package to get estimates of the expected log pointwise predictive density for each point, $ELPD_i$. Based on $\sum_i ELPD_i$, which model is preferred?
+
+The $elpd_{LOO}$ is higher for Model 2, so it is preferred.
+
+```{r echo=FALSE}
+loglik1 <- extract(well_stan1)[["log_lik"]]
+loglik2 <- extract(well_stan2)[["log_lik"]]
+loo1 <- loo(loglik1, save_psis = TRUE)
+loo2 <- loo(loglik2, save_psis = TRUE)
+loo_compare(loo1, loo2)
+```
+
+## e) Create a scatter plot of the $ELPD_i$'s for Model 2 versus the $ELPD_i$'s for Model 1. Create another scatter plot of the difference in $ELPD_i$'s between the models versus log arsenic. In both cases, color the dots based on the value of $y_i$. Interpret both plots. 
+
+In Figure 7, we see $ELPD_i$'s of Model 2 overlap those of Model 1 for most households, but Model 2 seems to yield higher predictive accuracy for the probabilities of switching of households that didn't switch to safer wells, as indicated by the red points scattering away from the line. 
+
+In Figure 8, as all $elpd_diff$ are less than 4, the difference between the two models is generally small. However, for households whose wells were contaminated with arsenic levels on the log scale between 0 and approximately 1.2, Model 1 appears to estimate the probability of switching better for those who didn't switch, while Model 2 does a better job for those that switched. For households whose wells were contaminated with logged arsenic levels less than 0 or approximately higher than 1.2, the reverse is true. The two plots are consistent in the sense that they both suggests the large difference in the posterior predictive accuracy between the two models for households that were exposed to high levels of arsenic and did not switch to safer wells, as indicated by some outliers households by the red dots scattering away from the y-intercept line.
+
+```{r echo = FALSE}
+elpd_df <- data.frame(elpd_model1 = (loo1$pointwise |> as.data.frame())$elpd_loo, 
+                      elpd_model2 = (loo2$pointwise |> as.data.frame())$elpd_loo, 
+                      switch = well_df$switch_well, 
+                      log_arsenic = log(well_df$arsenic)) |> 
+                      mutate(elpd_diff = elpd_model1 - elpd_model2)
+
+```
+
+```{r echo=FALSE}
+ggp23 <- elpd_df |> ggplot(aes(x = elpd_model1, y = elpd_model2, color = switch)) + 
+                    geom_point() + theme_minimal() + 
+                    geom_abline(intercept = 0, slope = 1) +
+                    labs(x = expression(Model ~ 1 ~ ELDP[i]), 
+                         y = expression(Model ~ 2 ~ ELDP[i]),
+                         title = "Figure 7", subtitle =  "ELDP")
+ggp24 <- elpd_df |> ggplot(aes(y = elpd_diff, x = log_arsenic, col = switch)) + 
+                    geom_point() + theme_minimal() +
+                    labs(x = expression(log(arsenic)), 
+                         y = expression(ELDP[diff] == ELPF[model1] - ELPD[model2]),
+                         title = "Figure 8", 
+                         subtitle =  expression(log(arsenic) ~ and ~ ELDP[diff]))+
+                         geom_hline(yintercept = 0)
+require(gridExtra)
+grid.arrange(ggp23, ggp24, ncol = 2)
+```
+
+## f) Given the outcome in this case is discrete, we can directly interpret the $ELPD_i$s. In particular, what is $\exp(ELPD_i)$? 
+
+Since $ELPD_i = log\big[p(y_i | \text{y}_{- i})\big]$, we intepret $e^{ELPD_i} = p(y_i | \text{y}_{- i})$ as the leave-one-out predictive probability of switching well of the $i^{th}$ household (i.e. probability that the $i^{th}$ household decided to switche wells based on the decisions either switch or not of all other households.)
+
+## g) For each model recode the $ELPD_i$'s to get $\hat{y}_{i}=E\left(Y_{i} | \boldsymbol{y}_{-i}\right)$. Create a binned residual plot, looking at the average residual $y_i - \hat{y}_i$ by arsenic for Model 1 and by log(arsenic) for Model 2. Split the data such that there are 40 bins. On your plots, the average residual should be shown with a dot for each bin. In addition, add in a line to represent +/- 2 standard errors for each bin. Interpret the plots for both models. 
+
+```{r echo=FALSE}
+elpd_df <- elpd_df |> mutate(y_hat1 = exp(elpd_model1),
+                             y_hat2 = exp(elpd_model2), 
+                             y = well_df$switch,
+                             epsilon_1 = y - y_hat1,
+                             epsilon_2 = y - y_hat2, 
+                             arsenic = well_df$arsenic,
+                             log_arsenic = log(well_df$arsenic))
+```
+
+```{r echo=FALSE}
+ggp25 <- elpd_df |> select(arsenic, epsilon_1)|>
+                    arrange(arsenic) |>
+                    mutate(arsenic_bin = cut(arsenic, breaks = 50),
+                           bin_cf = as.factor(as.numeric(arsenic_bin)))|>
+                    group_by(arsenic_bin)|>
+                    summarise(se = sd(epsilon_1)/sqrt(length(epsilon_1)),
+                              eps_avg = mean(epsilon_1)) |>
+                    mutate(se = coalesce(se, 0)) |>
+                    ggplot(aes(x = arsenic_bin, y = eps_avg)) + 
+                           geom_point(color = "palevioletred3") +
+                           geom_linerange(aes(arsenic_bin, ymin = eps_avg - 2*se, ymax = eps_avg + 2*se),
+                                         color = "royalblue4", 
+                                           alpha = 1) +
+                           theme_minimal() +
+                           labs(title = "Model 1", x = "arsenic", y = "Mean residuals") +
+                           theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+ggp26 <- elpd_df |> select(log_arsenic, epsilon_2)|>
+                    arrange(log_arsenic) |>
+                    mutate(log_arsenic_bin = cut(log_arsenic, breaks = 50))|>
+                    group_by(log_arsenic_bin)|>
+                    summarise(se = sd(epsilon_2)/sqrt(length(epsilon_2)),
+                              eps_avg = mean(epsilon_2)) |>
+                    mutate(se = coalesce(se, 0)) |>
+                    ggplot(aes(x = log_arsenic_bin, y = eps_avg)) + 
+                           geom_point(color = "palevioletred3") +
+                           geom_linerange(aes(log_arsenic_bin, ymin = eps_avg - 2*se, ymax = eps_avg + 2*se),
+                                         color = "royalblue4", 
+                                           alpha = 1) +
+                           theme_minimal()  + 
+                           labs(title = "Model 2", x = "logged arsenic", y = "Mean residuals") +                                       theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+require(gridExtra)
+grid.arrange(ggp25, ggp26, nrow = 2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
