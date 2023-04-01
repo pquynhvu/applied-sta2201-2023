@@ -1,0 +1,164 @@
+---
+title: "**STA2201 Project**"
+author: "Quynh Vu"
+date: "`r Sys.Date()`"
+output: pdf_document
+bibliography: references.bib  
+abstract: "The unprecedented emergence of COVID-19 upended our lives to a great extent, resulting in pressing health crises and economic fallouts on a global scale. Even after a considerable effort had gone into vaccination to lift COVID-19 restrictions on our regular physical activities and stabilize outbreak incidence, there continues to be variation in the course of the COVID-19 outbreak across provinces and territories. We use countrywide and province-level data on cases and deaths during 164 consecutive weeks sourced from the [Government of Canada](https://health-infobase.canada.ca/covid-19/)  to quantify COVID-19 weekly reported new case differential among Canadian provinces and potentially forecast the risk of future outbreaks using the Hierarchical Gompertz Time Series models."
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE, 
+  out.width = "100%",
+  fig.width = 10,
+  fig.height = 6.7, 
+  fig.retina = 3,
+  cache = TRUE)
+```
+
+```{r echo=FALSE}
+library(tinytex)
+library(tidyverse)
+library(here)
+library(rstan)
+library(bayesplot) 
+library(loo) 
+library(tidybayes) 
+library(reshape2)
+library(lubridate)
+library(gridExtra)
+library(rvest)
+library(janitor)
+library(anytime) 
+library(zoo)
+library(Hmisc)
+library(forecast)
+library(ggpubr)
+library(viridis) 
+```
+
+```{r echo=FALSE}
+covid_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/Project/covid19.csv") |>
+            select(c(prname, date, reporting_week, reporting_year, totalcases, numdeaths, ratedeaths))|>
+            rename(prov = prname, deaths = numdeaths, year = reporting_year, MR = ratedeaths) |> 
+            mutate(date = as.Date(date), year = year(date),  quarter = as.yearqtr(date),
+                   prov_code = case_when(prov == "British Columbia" ~ 'BC', 
+                                         prov == "Alberta" ~ 'AB', 
+                                         prov == "Saskatchewan" ~ 'SK', 
+                                         prov == "Manitoba" ~ 'MB',
+                                         prov == "Ontario" ~ 'ON', 
+                                         prov == "Quebec" ~ 'QC',
+                                         prov == "Newfoundland and Labrador" ~ 'NL', 
+                                         prov == "New Brunswick" ~ 'NB',
+                                         prov == "Nova Scotia" ~ 'NS', 
+                                         prov == "Prince Edward Island" ~ 'PE',
+                                         prov == "Yukon" ~ 'YT', 
+                                         prov == "Northwest Territories" ~ 'NT',
+                                         prov == "Nunavut" ~ 'NU', 
+                                         prov == "Canada" ~ 'Canada'),
+                   elapse_time = time_length(interval(as.Date("2020-01-25"), as.Date(date)), unit = "week"))|>
+           group_by(prov_code) |>
+           mutate(cum_cases = cumsum(totalcases), cum_deaths = cumsum(deaths)) |> na.omit() 
+covid_df$prov_code <- factor(covid_df$prov_code,                
+                             levels = c("Canada", "BC", "AB", "SK", "ON", "MB", "QC", "NL", "NB", "NS", "PE", "YT", "NT", "NU"))
+```
+
+# Introduction
+
+The first COVID-19 case was detected in Toronto (Canada) on January 25 [@NIH] and affected the country differently across administrative divisions shortly thereafter. The first two figures give an impression that, while Ontario logs the highest number of cases, the outbreak is the deadliest in Quebec province. However, 
+
+```{r echo=FALSE}
+options(scipen = 999)
+ggp1 <- covid_df |> ggplot(aes(x = date, y = cum_cases, color = prov_code)) +
+                           geom_line() +
+                           theme(axis.text.x=element_text(angle=60, hjust=1)) + 
+                           labs(y = "Cummulative cases", color = "Province", x = "time",
+                                title = "Countrywide and province-level total cases") + 
+                                theme_minimal() 
+ggp2 <- covid_df |> ggplot(aes(x = date, y = cum_deaths, color = prov_code)) +
+                           geom_line() +
+                           theme(axis.text.x=element_text(angle=60, hjust=1)) + 
+                           labs(y = "Cummulative deaths", color = "Province", x = "time",
+                                title = "Countrywide and provincewide total tolls") +
+                           theme_minimal() 
+ggp3 <- covid_df |> select(prov_code, year, deaths, totalcases) |>
+                    group_by(year) |>
+                    mutate(sum_deaths = sum(deaths)) |>
+                    select(- deaths, - totalcases, - prov_code) |>     
+                    distinct() |>
+                    ggplot(aes(y = sum_deaths, x = year, fill = year)) + 
+                           geom_bar(position="dodge", stat="identity") + 
+                           labs(x = "count", title = "Total deaths by year") +
+                           theme_minimal() 
+ggp4 <- covid_df |> select(prov_code, year, deaths, totalcases) |>
+                    group_by(year) |>
+                    mutate(sum_cases = sum(totalcases)) |>
+                    select(- deaths, - totalcases, - prov_code) |>     
+                    distinct() |>
+                    ggplot(aes(y = sum_cases, x = year, fill = year)) + 
+                           geom_bar(position="dodge", stat="identity") + 
+                           labs(title = "Total cases by year", x = "count") +
+                           theme_minimal()
+ggarrange(ggp1, ggp2, ggp3, ggp4, nrow = 2, ncol = 2, common.legend = TRUE, legend="bottom", 
+          widths = c(0.5, 0.5), heights = c(0.2, 0.2))  
+```
+regardless of vaccine coverage rate and demographic structure within each province, it could be attributable to Ontario being  Canada's most populous province. Also, the year 2022 witnessed the most cases and deaths by COVID-19, which spread more slowly in 2023 after active vaccination rollouts. Our primary variable of interest is the weekly reported COVID death counts by province up to March 18, 2023. We seek to establish a time series hierarchical model fitted to the weekly reported COVID-19 death count per province using a Gompertz curve and compare its effectiveness to the hierarchical model using the Logistic curve, the pooled and unpooled model. It is noteworthy that while Gompertz and Logistic curves may produce similar behaviour in certain phases of disease development, the Gompertz curve is asymmetric, whereas the logistic curve is symmetric, so using an inappropriate growth curve can have a substantial impact on forecasting. 
+
+# The models
+
+For each province, the weekly reported death count is modeled as a function of time using the Gompertz growth curve given by
+
+$$L(t_p) = \alpha_p + \beta_p e^{- e^{- K_p(t - T_p)}}$$
+
+where
+
+  * $L(t_p)$ is the logged death count at time t (in week) in province p. 
+  
+  * $\alpha_p + \beta_p$ is the carrying capacity of each province, i.e. every population has its own limits, so the disease can't spread to grow up infinitely.
+  
+  * $K_p$ is the relative growth rate at $T_p$ 
+  
+  * $T_p$ is the time at which the absolute growth rate is a maximum. 
+
+First, we attempt to fit the Gompertz curve to death tolls in the province of Ontario. Since $\hat{R}$ < 1.05 and effective sample size $n_{eff}$ > 100 for all estimates, the model converged.  Model convergence can also be shown using the ``traceplot`` plot.
+
+```{r echo=FALSE}
+covid_df_ON <- covid_df |> filter(prov_code == "ON") 
+```
+
+```{r echo=FALSE}
+stan_df_ON <- list(N = nrow(covid_df_ON), t = covid_df_ON$elapse_time, y = log(covid_df_ON$deaths + 1))
+stan_mod1 <- stan(file = here("C:/QV/STA 2201/STA2201-W2023/Project/gompertz.stan"), data = stan_df_ON, 
+                  chains = 5, iter = 1000, warmup = 500, refresh = 0)
+summary(stan_mod1)[["summary"]][c("alpha", "beta", "K", "T"),]
+```
+```{r echo=FALSE}
+traceplot(stan_mod1, pars = c("alpha", "beta", "K", "T"), ncol = 2)
+```
+
+The PSIS diagnostic plot indicates no influential points as none of the Pareto k estimates exceeds 0.7, suggesting the Monte Carlo sampling yields stable estimates for Swedish death tolls in 2020 with relatively small variance and bias, thus the LOO predictive distribution for point i does not deviate from the full predictive distribution.
+
+```{r echo=FALSE}
+y1 <- log(covid_df_ON$deaths + 1)
+yrep1 <- extract(stan_mod1)[["y_rep"]]
+samp100 <- sample(nrow(yrep1), 100)
+loglik1 <- extract(stan_mod1)[["log_lik"]]
+loo1 <- loo(loglik1, save_psis = TRUE)
+lw <- weights(loo1$psis_object)
+psis1 <- loo1$psis_object
+k_pareto_mod1 <- loo1$diagnostics$pareto_k 
+k_pareto_mod1 <- data.frame(time = covid_df_ON$elapse_time, k_pareto_mod1) |>
+                 filter(k_pareto_mod1 >= 0.7) |>
+                 rename("Pareto k estimates" = k_pareto_mod1) 
+plot(loo1)
+```
+Another way to see this is to look at the distributions of the median of the replicated data sets on death counts from the posterior predictive distribution and compare them with that of the observed death tolls. The histogram and density curves below indicate that the predicted mean death tolls, compared to the observed mean death tolls of the respective age groups, almost matches.
+
+```{r echo=FALSE}
+ppc_stat(y1, yrep1, stat = "mean")
+ppc_dens_overlay(y1, yrep1[samp100, ]) 
+```
