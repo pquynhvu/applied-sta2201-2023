@@ -1,51 +1,47 @@
-﻿"Population estimates on July 1st, by age and sex 1 2 3 4"
-"Frequency: Annual"
-"Table: 17-10-0005-01 (formerly CANSIM 051-0001)"
-"Release date: 2022-12-21"
-"Geography: Canada, Province or territory"
-""
-""
-
-"Geography","Canada",,,,
-"Sex","Both sexes",,,,
-"Age group 3 5","2018","2019","2020","2021","2022"
-,"Persons",,,,
-"All ages","37,065,084","37,601,230","38,007,166","38,226,498","38,929,902"
-"0 to 4 years","1,940,483","1,932,784","1,918,870","1,885,075","1,881,099"
-"5 to 9 years","2,033,313","2,041,278","2,046,207","2,044,619","2,062,572"
-"10 to 14 years","1,992,389","2,033,308","2,073,456","2,091,774","2,126,905"
-"15 to 19 years","2,106,395","2,114,650","2,100,625","2,057,182","2,124,972"
-"20 to 24 years","2,436,459","2,475,503","2,480,898","2,450,234","2,520,278"
-"25 to 29 years","2,575,089","2,626,204","2,643,411","2,636,004","2,703,647"
-"30 to 34 years","2,553,299","2,605,394","2,660,858","2,693,643","2,782,998"
-"35 to 39 years","2,517,339","2,581,046","2,629,217","2,662,756","2,718,849"
-"40 to 44 years","2,381,576","2,421,889","2,463,031","2,506,925","2,573,624"
-"45 to 49 years","2,407,566","2,398,378","2,390,358","2,382,520","2,405,593"
-"50 to 54 years","2,580,128","2,505,044","2,450,498","2,428,937","2,423,627"
-"55 to 59 years","2,728,010","2,751,672","2,745,122","2,698,869","2,635,125"
-"60 to 64 years","2,457,486","2,514,070","2,560,211","2,605,809","2,640,008"
-"65 to 69 years","2,036,232","2,098,142","2,167,219","2,232,897","2,308,096"
-"70 to 74 years","1,625,616","1,708,613","1,787,882","1,853,367","1,879,942"
-"75 to 79 years","1,109,685","1,165,334","1,219,585","1,280,982","1,381,797"
-"80 to 84 years","766,499","789,039","812,743","842,273","878,761"
-"85 to 89 years","503,776","513,205","519,941","525,901","530,078"
-"90 to 94 years","236,509","243,103","250,128","257,006","260,752"
-"95 to 99 years","67,778","71,993","75,091","76,817","77,694"
-"100 years and over","9,457","10,581","11,815","12,908","13,485"
-,"Years",,,,
-"Median age","40.8","40.8","40.9","41.1","41.0"
-
-
-
-
-Footnotes:
-1,"Postcensal estimates are based on the 2016 Census counts adjusted for census net undercoverage (CNU) (including adjustment for incompletely enumerated reserves (IER)) and the components of demographic growth that occurred since that census. Intercensal estimates are produced using counts from two consecutive censuses adjusted for CNU (including IER) and postcensal estimates."
-2,"Estimates are final intercensal up to 2015, final postcensal from 2016 to 2020, updated postcensal for 2021 and preliminary postcensal for 2022."
-3,"Data for persons aged 90 to 100 years and over will be available from 2001."
-4,"The population growth, which is used to calculate population estimates, is comprised of the natural growth (Tables 17100006 and 17100016), international migration (Table 17100014) and interprovincial migration (Table 17100015)."
-5,"Age at last birthday in years."
-
-
-
-"How to cite: Statistics Canada. Table 17-10-0005-01  Population estimates on July 1st, by age and sex"
-https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710000501
+﻿Age group,2018,2019,2020,2021,2022
+0 to 4 years,"1,940,483","1,932,784","1,918,870","1,885,075","1,881,099"
+5 to 9 years,"2,033,313","2,041,278","2,046,207","2,044,619","2,062,572"
+10 to 14 years,"1,992,389","2,033,308","2,073,456","2,091,774","2,126,905"
+15 to 19 years,"2,106,395","2,114,650","2,100,625","2,057,182","2,124,972"
+20 to 24 years,"2,436,459","2,475,503","2,480,898","2,450,234","2,520,278"
+25 to 29 years,"2,575,089","2,626,204","2,643,411","2,636,004","2,703,647"
+30 to 34 years,"2,553,299","2,605,394","2,660,858","2,693,643","2,782,998"
+35 to 39 years,"2,517,339","2,581,046","2,629,217","2,662,756","2,718,849"
+40 to 44 years,"2,381,576","2,421,889","2,463,031","2,506,925","2,573,624"
+45 to 49 years,"2,407,566","2,398,378","2,390,358","2,382,520","2,405,593"
+50 to 54 years,"2,580,128","2,505,044","2,450,498","2,428,937","2,423,627"
+55 to 59 years,"2,728,010","2,751,672","2,745,122","2,698,869","2,635,125"
+60 to 64 years,"2,457,486","2,514,070","2,560,211","2,605,809","2,640,008"
+65 to 69 years,"2,036,232","2,098,142","2,167,219","2,232,897","2,308,096"
+70 to 74 years,"1,625,616","1,708,613","1,787,882","1,853,367","1,879,942"
+75 to 79 years,"1,109,685","1,165,334","1,219,585","1,280,982","1,381,797"
+80 to 84 years,"766,499","789,039","812,743","842,273","878,761"
+85 to 89 years,"503,776","513,205","519,941","525,901","530,078"
+90 to 94 years,"236,509","243,103","250,128","257,006","260,752"
+95 to 99 years,"67,778","71,993","75,091","76,817","77,694"
+100 years and over,"9,457","10,581","11,815","12,908","13,485"
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+,,,,,
+Footnotes:,,,,,
+1,Postcensal estimates are based on the 2016 Census counts adjusted for census net undercoverage (CNU) (including adjustment for incompletely enumerated reserves (IER)) and the components of demographic growth that occurred since that census. Intercensal estimates are produced using counts from two consecutive censuses adjusted for CNU (including IER) and postcensal estimates.,,,,
+2,"Estimates are final intercensal up to 2015, final postcensal from 2016 to 2020, updated postcensal for 2021 and preliminary postcensal for 2022.",,,,
+3,Data for persons aged 90 to 100 years and over will be available from 2001.,,,,
+4,"The population growth, which is used to calculate population estimates, is comprised of the natural growth (Tables 17100006 and 17100016), international migration (Table 17100014) and interprovincial migration (Table 17100015).",,,,
+5,Age at last birthday in years.,,,,
+,,,,,
+,,,,,
+,,,,,
+"How to cite: Statistics Canada. Table 17-10-0005-01  Population estimates on July 1st, by age and sex",,,,,
+https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710000501,,,,,
