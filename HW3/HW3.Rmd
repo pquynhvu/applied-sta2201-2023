@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
   fig.width = 10,
   fig.height = 6.7, 
   fig.retina = 3,
-  cache = TRUE)
+  cache = FALSE)
 ```
 
 ```{r echo=FALSE}
@@ -104,7 +104,7 @@ ggp3 <- dd |> select(marital, p_marital, p_marital_true) |>
                      theme_minimal()
 ggarrange(ggp1, ggp2, ggp3, nrow = 2, ncol = 2, common.legend = TRUE, legend="bottom")  
 ```
-The surveyed population doesn't seem to be representative of the US population (i.e. according to the survey, American women aged 25-29 or those with a bachelor's degree are the most willing to have kids in the future while in reality, it is women aged 20-24 or those who have earned some college experience.) Classifying across marital status yields more accurate estimates in the sense of a lower surveyed proportion corresponding to a lower true one, and vice versa.
+The surveyed population doesn't seem to be representative of the US population (e.g., according to the survey, American women aged 25-29 or those with a bachelor's degree are the most willing to have kids in the future while in reality, it is women aged 20-24 or those who have earned some college experience.) Classifying across marital status yields more accurate estimates in the sense of a lower surveyed proportion corresponding to a lower true one, and vice versa.
 
 ## b) Calculate the proportion of survey women in each age group that want to have children. We will refer to this set of estimates as $\hat{p}^{\text{raw}}_a$ for each age group $a$.
 
@@ -149,24 +149,24 @@ where $y_i = 1$ if respondent $i$ wants more children and 0 otherwise, and the $
 iter1 = 3000
 nchain1 = 10
 stan_df <- list(N = length(dd$wants_more_kids),
-                K = 3,
+                y = dd$wants_more_kids,
                 formerly_married = dd$formerly_married,
                 married = dd$married,
-                A = 5,
-                E = 5,
+                J = 5,
+                K = 5,
                 age = dd$age_fc,
-                edu = dd$edu_fc,
-                y = dd$wants_more_kids)
+                edu = dd$edu_fc)
 ```
 
 ```{r echo=FALSE}
-mod <- stan(data = stan_df, file = here("C:/GitHub/STA2201/STA2201-W2023/HW3/fertility_pop.stan"), 
+mod <- stan(data = stan_df, file = here("C:/QV/STA 2201/STA2201-W2023/HW3/HW3_stancode.stan"), 
             chains = nchain1, iter = iter1, warmup =1000, refresh = 0)
-tab3 <- summary(mod)[["summary"]][c(paste0("beta[",1:3, "]"), paste0("alpha_age[",1:5, "]"), paste0("alpha_edu[",1:5, "]")),]
+tab3 <- summary(mod)[["summary"]][c(paste0("beta[",1:3, "]"), paste0("alpha_age[",1:5, "]"), paste0("alpha_edu[",1:5, "]"), "sigma_age", "sigma_edu"),]
 tab3
 ```
+
 ```{r echo = FALSE}
-alpha_age <- extract(mod)[["alpha_age"]] |> as.data.frame() |> 
+alpha_age <- rstan::extract(mod)[["alpha_age"]] |> as.data.frame() |> 
              rename("20-24" = V1, "25-29" = V2, "30-34" = V3, "35-39" = V4,"40-44" = V5) |>
              melt() |>
              rename(age_gp = variable)
@@ -199,9 +199,9 @@ edu_fc <- data.frame(edu_fc = dd$edu_fc) |>  distinct()
 ```
 
 ```{r echo=FALSE}
-beta <- tab3[1:3, c(1, 5, 8)] |> as.data.frame()
-alpha_age <- tab3[4:8, c(1, 5, 8)] |> as.data.frame()
-alpha_edu <- tab3[9:13, c(1, 5, 8)] |> as.data.frame()
+beta <- tab3[1:3, c(1,4,8)]
+alpha_age <- tab3[4:8, c(1,4,8)]
+alpha_edu <- tab3[9:13, c(1,4,8)]
 ```
 
 ```{r echo = FALSE}
@@ -223,7 +223,7 @@ pi_df
 ```
 ## f) The true proportions of women wanting more children by age group are listed in `fertility_intentions_true`. Report the absolute difference by age group for each of the estimates $\hat{p}^{\text{raw}}_a$, $\hat{p}^{\text{ps}}_a$ and $\hat{p}^{\text{MRP}}_a$, as well as the mean absolute difference across all age groups. Comment on what you observe based on the relative performance of each of the estimation approaches. 
 
-Overall the Bayesian model yields the least accurate estimates of the proportion of women who want kids in a given age group and the true proportions, while the post-stratified estimates are the most accurate, except for the group of women aged 35-39. The $p_{raw}$ estimates seem unstable.
+When considering each age group separately, the Bayesian model yields the least accurate estimates of the proportion of women who want kids in a given age group and the true proportions overall, whereas the post-stratified estimates are the most accurate, except for the group of women aged 35-39. The $p_{raw}$ estimates seem unstable. However, the raw estimates are closest to and the post-stratified estimate deviating the most from the true value on average across age groups, which makes sense since the Bureau data is representative of the population.
 
 ```{r echo=FALSE}
 get_absolute_difference = function(p_true, p_hat){
@@ -240,6 +240,18 @@ p_compare <- data.frame(age_gp = dd$age_gp) |> distinct() |>
                     p_MRP = pi_df$p_MRP,
                     abs_diff_p_raw = get_absolute_difference(p_true, p_raw),
                     abs_diff_p_ps = get_absolute_difference(p_true, p_ps),
-                    abs_diff_p_MRP = get_absolute_difference(p_true, p_MRP))
+                    abs_diff_p_MRP = get_absolute_difference(p_true, p_MRP),
+                    )
+p_compare <- p_compare |> as.data.frame()
 p_compare
+```
+
+**The mean absolute difference across all age groups:**
+
+```{r echo=FALSE}
+p_compare |> select(abs_diff_p_raw, abs_diff_p_ps, abs_diff_p_MRP) |>
+                    mutate(mean_abs_diff_p_raw = mean(abs_diff_p_raw),
+                           mean_abs_diff_p_ps = mean(abs_diff_p_ps),
+                           mean_abs_diff_p_MRP = mean(abs_diff_p_MRP)) |>
+              select(mean_abs_diff_p_raw, mean_abs_diff_p_ps, mean_abs_diff_p_MRP) |> distinct()
 ```
