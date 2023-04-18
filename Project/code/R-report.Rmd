@@ -41,16 +41,23 @@ library(ggpubr)
 library(viridis) 
 library(stringr)  
 library(ggmap)
-install.packages("osmdata")
+#install.packages("osmdata")
 library(osmdata)
 library('rvest')
+library(skimr)
+library(visdat)
 ```
 
+# Introduction
+
+## Data
+
+## EDA
+
 ```{r echo=FALSE}
-covid_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/Project/data/COVID19%20cases.csv") |>             
-            select(- c(Assigned_ID, Outbreak.Associated)) |>
-            rename(id = X_id, 
-                   source = Source.of.Infection,
+covid_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/Project/data/COVID19%20cases.csv") |>           
+            select(- c(X_id, Assigned_ID, Outbreak.Associated)) |>
+            rename(source = Source.of.Infection,
                    age_gp = Age.Group, 
                    NBHD = Neighbourhood.Name,
                    type = Classification,
@@ -61,35 +68,47 @@ covid_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/m
                    ICU = Ever.in.ICU,
                    intubated = Ever.Intubated,
                    outcome = Outcome) |>
-           filter(outcome != "ACTIVE" & source != "Pending") |>
-           mutate(est_acquired_date = as.Date(est_acquired_date, "%m/%d/%Y"),
-                  reported_date = as.Date(reported_date, "%m/%d/%Y"),
-                  age_gp = case_when(age_gp == "50 to 59 Years" ~ '50-59',
-                                     age_gp == "20 to 29 Years" ~ '20-29',
-                                     age_gp == "60 to 69 Years" ~ '60-69',
-                                     age_gp == "80 to 89 Years" ~ '80-89',
-                                     age_gp == "70 to 79 Years" ~ '70-79',
-                                     age_gp == "30 to 39 Years" ~ '30-39',
-                                     age_gp == "40 to 49 Years" ~ '40-49',
-                                     age_gp == "19 and younger" ~ '19-',
-                                     age_gp == "90 and older" ~ '90+'),
-                  source = case_when(source == "Travel" ~ "travel",
-                                     source == "Community" ~ "community",
-                                     source == "Outbreaks, Congregate Settings" ~ "congregate settings",
-                                     source == "Close Contact" ~ "close contact",
-                                     source == "Household Contact" ~ "household",
-                                     source == "No Information" ~ "no information",
-                                     source == "Outbreaks, Healthcare Institutions" ~ "healthcare institutions",
-                                     source == "Outbreaks, Other Settings" ~ "other"),
-                  type = case_when(type == "CONFIRMED" ~ 'confirmed', type == "PROBABLE" ~ 'probable'),
-                  gender = case_when(gender == "MALE" ~ 'male', gender == "FEMALE" ~ 'female'),
-                  outcome = case_when(outcome == "RESOLVED" ~ 'resolved', outcome == "FATAL" ~ 'fatal'),
-                  age_gp = as.factor(recode(age_gp, `1`="19-",`2`="20-29",`3`="30-39",`4`="40-49",`5`="50-59",
-                                                    `6`="60-69",`7`="70-79",`8`="80-89", `9` = "90+")),
-                  gender = as.factor(recode(gender, `0` = "male", `1` = "female")),
-                  outcome = as.factor(recode(outcome, `1` = "fatal", `0` = "resolved")),
-                  death = case_when(outcome == "fatal" ~ 1, outcome == "resolved" ~ 0)) |>
-                  mutate_if(is.character, ~na_if(., ''))
+           filter(outcome != "ACTIVE") |>
+          mutate_if(is.character, ~na_if(., ''))
+```
+
+```{r echo=FALSE}
+skim(covid_df)
+vis_miss(covid_df, warn_large_data = FALSE)
+```
+```{r echo=FALSE}
+covid_df <- covid_df |> mutate(est_acquired_date = as.Date(est_acquired_date, "%m/%d/%Y"),
+                               reported_date = as.Date(reported_date, "%m/%d/%Y"),
+                               age_gp = case_when(age_gp == "50 to 59 Years" ~ '50-59',
+                                                  age_gp == "20 to 29 Years" ~ '20-29',
+                                                  age_gp == "60 to 69 Years" ~ '60-69',
+                                                  age_gp == "80 to 89 Years" ~ '80-89',
+                                                  age_gp == "70 to 79 Years" ~ '70-79',
+                                                  age_gp == "30 to 39 Years" ~ '30-39',
+                                                  age_gp == "40 to 49 Years" ~ '40-49',
+                                                  age_gp == "19 and younger" ~ '19-',
+                                                  age_gp == "90 and older" ~ '90+'),
+                               source = case_when(source == "Travel" ~ "travel",
+                                                  source == "Community" ~ "community",
+                                                  source == "Outbreaks, Congregate Settings" ~ "congregate settings",
+                                                  source == "Close Contact" ~ "close contact",
+                                                  source == "Household Contact" ~ "household",
+                                                  source == "No Information" ~ "no information",
+                                                  source == "Outbreaks, Healthcare Institutions" ~ "healthcare institutions",
+                                                  source == "Outbreaks, Other Settings" ~ "others"),
+                               type = case_when(type == "CONFIRMED" ~ 'confirmed', type == "PROBABLE" ~ 'probable'),
+                               gender = case_when(gender == "MALE" ~ 'male', gender == "FEMALE" ~ 'female'),
+                               outcome = case_when(outcome == "RESOLVED" ~ 'resolved', outcome == "FATAL" ~ 'fatal'),
+                               age_fc = case_when(age_gp == "19-" ~ 1, age_gp == "20-29" ~ 2, age_gp == "30-39" ~ 3, age_gp == "40-49" ~ 4,
+                                                  age_gp == "50-59" ~ 5, age_gp == "60-69" ~ 6, age_gp == "70-79" ~ 7, age_gp == "80-89" ~ 8,
+                                                  age_gp == "90+" ~ 9),
+                               gender_fc = case_when(gender == "female" ~ 1, gender == "male" ~ 0),
+                               outcome = as.factor(recode(outcome, `1` = "fatal", `0` = "resolved")),
+                               deaths = case_when(outcome == "fatal" ~ 1, outcome == "resolved" ~ 0),
+                               source_fc = case_when(source == "travel" ~ 1, source == "community" ~ 2, source == "congregate settings" ~ 3, 
+                                                     source == "close contact" ~ 4, source == "household" ~ 5, source == "no information" ~ 6,
+                                                     source == "healthcare institutions" ~ 7, source == "others" ~ 8)) |>
+                        drop_na()
 ```
 
 ```{r echo=FALSE}
@@ -137,18 +156,40 @@ hospitals <- data.frame(hospitals, hospital_district) |>
              ungroup()
 
 hospitals_by_FSA <- left_join(hospitals, postalcode, by = c("district")) |> select(- hospital) |> distinct()
-covid_df <- left_join(covid_df, hospitals_by_FSA, by = "FSA") |> distinct()
+covid_df <- left_join(covid_df, hospitals_by_FSA, by = "FSA") |> distinct() |>
+            mutate(district_fc = case_when(district == "North York" ~ 1,
+                                           district == "Toronto and East York" ~ 2,
+                                           district == "Scarborough" ~ 3,
+                                           district == "Etobicoke York" ~ 4)) 
+```
+
+```{r echo=FALSE}
+covid_df |> group_by(district, age_gp) |>
+            mutate(mu = sum(deaths)/n()) |> 
+            select(district, mu) |>
+            distinct() |>
+            ggplot(aes(y=mu, x=age_gp)) + 
+                   geom_bar(position="dodge", stat="identity") +
+                   facet_wrap(~district)+
+                   theme_minimal()
 ```
 
 ```{r echo=TRUE}
 ttc <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/Project/data/ttc.csv") |>
        select(Neighbourhood, TTC.Stops, Traffic.Collisions) |>
-       rename(NBHD = "Neighbourhood", num_stops = "TTC.Stops", collision = "Traffic.Collisions") 
+       rename(NBHD = "Neighbourhood", num_stops = "TTC.Stops", collision = "Traffic.Collisions") |>
+       mutate(NBHD = case_when(NBHD == "Mimico" ~ 'Mimico (includes Humber Bay Shores)',
+                               NBHD == "Dovercourt-Wallace Emerson-Juncti" ~ 'Dovercourt-Wallace Emerson-Junction',
+                               NBHD == "Cabbagetown-South St.James Town" ~ 'Cabbagetown-South St. James Town',
+                               NBHD == "North St.James Town" ~ 'North St. James Town',
+                               NBHD == "Briar Hill-Belgravia" ~ 'Briar Hill - Belgravia',
+                               TRUE ~ as.character(NBHD)))
+
 covid_df <- left_join(covid_df, ttc, by = "NBHD") 
 ```
 
 ```{r echo=FALSE}
-age80plus <- c('80-89', '80-89', '90+')
+age70plus <- c('70-79', '80-89', '80-89', '90+')
 pop_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/Project/data/wellbeing2016.csv") |>
           select(- c("X55.years.and.over" , "X65.years.and.over", "X85.years.and.over", 
                      "Total.Population...All.Age.Groups...100..data",
@@ -172,30 +213,36 @@ pop_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/mai
                                     age == "X90.to.94.years" ~ '90+',
                                     age == "X95.to.99.years" ~ '90+',
                                     age == "X100.years.and.over" ~ '90+'),
-                 plus80_fc = case_when(age_gp %in% age80plus ~ 'over 80', .default = 'less than 80')) |>
+                 plus70_fc = case_when(age_gp %in% age70plus ~ 'over 70', TRUE ~ 'less than 70')) |>
              select(- age) |>
              drop_na()|>
              rename(NBHD = "Neighbourhood") |>
              group_by(NBHD, age_gp)|>
-             mutate(pop_age_NBHD = sum(pop_age_NBHD)) |>
+             mutate(pop_age_NBHD = sum(pop_age_NBHD),
+                    NBHD = case_when(NBHD == "Danforth East York" ~ 'Danforth-East York',
+                                     NBHD == "Briar Hill-Belgravia" ~ 'Briar Hill - Belgravia',
+                                     TRUE ~ as.character(NBHD))) |>
              ungroup() |>
              distinct()
 ```
 
 ```{r echo=FALSE}
 covid_pop_df <- left_join(covid_df, pop_df, by = c('NBHD', 'age_gp')) |>
-                drop_na() |>
                 group_by(district) |> 
-                mutate(pop = sum(pop_age_NBHD), 
-                       prop80plus = mean(plus80_fc == "over 80"),
+                mutate(pop_district = sum(pop_age_NBHD), 
+                       prop70plus = mean(plus70_fc == "over 70"),
                        sum_ttc_stops = sum(num_stops),
-                       stop_volume = pop/sum(num_stops),
                        collision_per_stop = sum(collision)/sum(num_stops)) |> 
-                ungroup()
+                ungroup() |>
+                arrange(district_fc)
 ```
 
+```{r echo=FALSE}
+tab1 <- as.data.frame(table(covid_pop_df$district)) |> rename(district = Var1)
+tab = c(0, tab1$Freq)
+```
 
-# The model
+# Methods
 
 There are two levels. Let i = 1, 2, ..., N denote individuals and j = 1, 2, 3, 4 districts. Deaths in district j follow a Poisson distribution,
 
@@ -210,4 +257,17 @@ We model the individual latent death risk with a two-level model:
 $$log(\mu_{ij}) = \alpha_0 + \sum_{k = 1}^K \alpha_k X_{ijk} + \sum_{l = 1}^L \beta_l X_{jl}$$
 where $X_{ij} = {`gender`, `age_gp`, `source`} are individual-level predictors, and $Z_j = {`prop80plus`, `stop_volume`, `collision_per_stop`, `num_of_hospitals`} are district-level predictors.
 
+```{r}
+dd <- covid_pop_df |> select(id, district, mu_j) |>
+                      mutate(district_fc = case_when(district == "North York" ~ '1',
+                                                     district == "Toronto and East York" ~ '2',
+                                                     district == "Etobicoke York" ~ '3',
+                                                     district == "Scarborough" ~ '4')) 
 
+```
+
+# Results
+
+# Discussion
+
+# References
