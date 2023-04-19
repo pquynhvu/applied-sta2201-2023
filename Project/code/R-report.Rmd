@@ -1,10 +1,13 @@
 ---
 title: "**STA2201 Project**"
 author: "Quynh Vu"
-date: "`r Sys.Date()`"
+date: "April 19, 2023"
 bibliography: bibliography.bib
-output: pdf_document
-abstract: "The unprecedented emergence of COVID-19 upended our lives to a great extent, resulting in pressing health crises and economic fallouts on a global scale. Even after a considerable effort had gone into vaccination to lift COVID-19 restrictions on our regular physical activities and stabilize outbreak incidence, there continues to be variation in the course of the COVID-19 outbreak across provinces and territories. We use countrywide and province-level data on cases and deaths during 164 consecutive weeks sourced from the [Government of Canada](https://health-infobase.canada.ca/covid-19/)  to quantify COVID-19 weekly reported new case differential among Canadian provinces and potentially forecast the risk of future outbreaks using the Hierarchical Gompertz Time Series models."
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 2
+abstract: "The unprecedented emergence of COVID-19 upended our lives to a great extent, resulting in pressing health crises and economic fallouts on a global scale. There have been, by and large, appreciable variations in the course of the COVID-19 outbreak across countries and territories. To come within the scope of this study, we combined resident-level COVID-19 fatalities data in Toronto, the 2016 census demographics data and the community council data to quantify the differentials in the extent to which residents in four Toronto communities (Etobicoke York, North York, Toronto and East York, and Scarborough) are susceptible to COVID-19 during the early phase of the pandemic. We modelled the probability that individuals in different age groups would pass on after contracting COVID-19 in 2020 by the Hierarchical Logit Model. The findings are that these probabilities differ across four communities, which is attributable to varied capacities and unequal access to hospitals among neighbourhoods to a certain degree. Our aim is to provide data-based guidance for further research in public health policies to reduce health inequities."
 ---
 
 ```{r setup, include=FALSE}
@@ -40,45 +43,48 @@ library(forecast)
 library(ggpubr)
 library(viridis) 
 library(stringr)  
-library(ggmap)
-#install.packages("osmdata")
-library(osmdata)
-library('rvest')
+library(rvest)
 library(skimr)
 library(visdat)
 ```
 
-# Introduction
+\newpage 
 
-## Data
+# 1. Introduction
 
-## EDA
+COVID-19 is a contagious disease that results from the novel strain of the SARS-CoV-2 virus. The first interhuman transmission case was confirmed in Toronto (Ontario) on January 25, 2020 [@urrutia2021overview], shortly followed by widespread disruption to businesses, education, and essential health services across Canada. The Canadian government gave priority to the procurement and distribution of effective COVID vaccines to lift restrictions on our regular physical activities and stabilize outbreak incidence above all things. However, three years of the pandemic accentuated the inadequacy of hospital capacity and shortage of healthcare workers to serve individuals with medical needs, evidenced by an increase in physician office visits by 27% for the first twelve months of the pandemic [@chang2022health]. It poses a challenge to Canada's self-sufficiency and the ability to mitigate future outbreaks and curtail fatalities. It is noteworthy that "the concentration of poverty in particular neighbourhoods" [@hulchanski2010three] resulting from income polarization in Toronto renders residents living in low-income neighbourhoods subject to poorer healthcare infrastructure and, therefore, more vulnerable to the pandemic than their counterparts. Estimating the individual mortality risk of COVID-19 (i.e. how likely a person is to die when infected with the disease) can help nip future outbreaks in the bud by guiding policymakers to implement public services and develop infrastructure that addresses those who are most in need. In this study, we examine the extent to which how mortality risk from COVID-19 varies across four communities in Toronto after controlling for community-level population size and age structure, sex at birth, and healthcare services.
+
+# 2. Data
+
+## a) Data Sources and Cleaning
+
+We combined 3 data sets for the analysis as follows:
+
+  * For the COVID-19 mortalities in Toronto data set, we sourced data from [Open data Toronto](https://open.toronto.ca/dataset/covid-19-cases-in-toronto/), which is now hosted on GitHub ([access here](https://github.com/pquynhvu/STA2201-W2023/blob/main/Project/data/COVID19%20cases.csv)). This individual snapshot of mortality risk includes the patient's age and gender, neighbourhoods characterized by the Forward Sortation Area (FSA) code, date reported, whether hospitalized or not, and outcome (resolved or fatal). We want to note that a "fatal" outcome implies any case that has died and the medical cause of death is related to COVID-19, while a "resolved" outcome means any case that has either recovered or died but the medical cause of death is unrelated to COVID-19.
+
+  * For the Canadian 2016 neighbourhood-level census demographics, we also sourced data from [Open data Toronto](https://open.toronto.ca/dataset/wellbeing-toronto-demographics/), which is also hosted on GitHub ([access here](https://github.com/pquynhvu/STA2201-W2023/blob/main/Project/data/wellbeing2016.csv)). The data set was aggregated from the total population in the 2016 Census by Statistics Canada and Toronto's 140 neighbourhood planning areas by the City of Toronto. For the 2016 census, the undercoverage rate published by Statistics Canada was 4.32% [@StatsCAN], which is the missed rate in the census due to travelling, refusal to participate, the growing number of immigrants and non-permanent residents in Canada, etc. 
+
+  * For the community council data, we scraped data from the [City of Toronto website](https://www.toronto.ca/city-government/data-research-maps/neighbourhoods-communities/community-council-area-profiles/) using the `rvest` package to categorize Toronto's neighbourhoods into the designated communities. We also scraped the list of hospitals in Toronto by neighbourhoods from [Wikipedia](https://en.wikipedia.org/wiki/List_of_hospitals_in_Toronto).
+  
+We obtained resident-level fatalities data in Toronto from 2020 to 2023. To study how the mortality risks from COVID-19 varied across communities in Toronto before pharmaceutical public health interventions were introduced, we primarily used resident-level fatalities data before December 15, 2020 [@StatsCAN], when Ontario started its first phase of vaccine rollouts. We first matched the resident-level fatalities data with the list of hospitals in Toronto and categorized neighbourhoods into four designated communities by the FSA code. We created a numeric variable for the number of hospitals in the community (`num_of_hospitals`). We then aggregated this data set with the population data by matching the neighbourhood of residence and age group of each individual. To merge these two data sets, we corrected the difference in some neighbourhoods' recorded names (e.g. \textit{Danforth East York} to \textit{Danforth-East York} or \textit{Briar Hill-Belgravia} to \textit{Briar Hill - Belgravia}). We created three numeric variables, the proportion of the population aged above 70 in a community (`prop70plus`), the total population in each community (`pop_district`), and the average number of residents that a hospital in a particular neighbourhood should be able to serve at its maximum capacity, assuming that residents do not visit a hospital outside their community of residence (`pop_per_hospital`). Also, since there is mounting evidence that a biological male suffers more severe COVID-19 symptoms and has a higher mortality risk compared to a biological female [@scully2020considering], we only included individuals with clearly identified sex at birth in the analysis (i.e. we considered a transwoman a biological male and a transman a biological female and excluded patients who declared themselves to be non-binary, transgender, and other) to investigate these sex differences in the immune response against coronavirus within the Toronto population. The "cleaned" data set available to run analyses has no missing values.
 
 ```{r echo=FALSE}
 covid_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/Project/data/COVID19%20cases.csv") |>           
-            select(- c(X_id, Assigned_ID, Outbreak.Associated)) |>
-            rename(source = Source.of.Infection,
-                   age_gp = Age.Group, 
+            select(Age.Group, Neighbourhood.Name, FSA, Reported.Date, Client.Gender, Outcome, Ever.Hospitalized) |>
+            rename(age_gp = Age.Group, 
                    NBHD = Neighbourhood.Name,
-                   type = Classification,
-                   est_acquired_date = Episode.Date,
                    reported_date = Reported.Date,
                    gender = Client.Gender,
                    hospitalized = Ever.Hospitalized,
-                   ICU = Ever.in.ICU,
-                   intubated = Ever.Intubated,
                    outcome = Outcome) |>
            filter(outcome != "ACTIVE") |>
-          mutate_if(is.character, ~na_if(., ''))
+           mutate_if(is.character, ~na_if(., '')) 
 ```
 
 ```{r echo=FALSE}
-skim(covid_df)
-vis_miss(covid_df, warn_large_data = FALSE)
-```
-```{r echo=FALSE}
-covid_df <- covid_df |> mutate(est_acquired_date = as.Date(est_acquired_date, "%m/%d/%Y"),
-                               reported_date = as.Date(reported_date, "%m/%d/%Y"),
+covid_df <- covid_df |> filter(gender %in% c("FEMALE", "MALE", "TRANS WOMAN", "TRANS MAN")) |>
+                        mutate(reported_date = as.Date(reported_date, "%m/%d/%Y"),
+                               year = year(reported_date),
                                age_gp = case_when(age_gp == "50 to 59 Years" ~ '50-59',
                                                   age_gp == "20 to 29 Years" ~ '20-29',
                                                   age_gp == "60 to 69 Years" ~ '60-69',
@@ -88,27 +94,14 @@ covid_df <- covid_df |> mutate(est_acquired_date = as.Date(est_acquired_date, "%
                                                   age_gp == "40 to 49 Years" ~ '40-49',
                                                   age_gp == "19 and younger" ~ '19-',
                                                   age_gp == "90 and older" ~ '90+'),
-                               source = case_when(source == "Travel" ~ "travel",
-                                                  source == "Community" ~ "community",
-                                                  source == "Outbreaks, Congregate Settings" ~ "congregate settings",
-                                                  source == "Close Contact" ~ "close contact",
-                                                  source == "Household Contact" ~ "household",
-                                                  source == "No Information" ~ "no information",
-                                                  source == "Outbreaks, Healthcare Institutions" ~ "healthcare institutions",
-                                                  source == "Outbreaks, Other Settings" ~ "others"),
-                               type = case_when(type == "CONFIRMED" ~ 'confirmed', type == "PROBABLE" ~ 'probable'),
-                               gender = case_when(gender == "MALE" ~ 'male', gender == "FEMALE" ~ 'female'),
-                               outcome = case_when(outcome == "RESOLVED" ~ 'resolved', outcome == "FATAL" ~ 'fatal'),
-                               age_fc = case_when(age_gp == "19-" ~ 1, age_gp == "20-29" ~ 2, age_gp == "30-39" ~ 3, age_gp == "40-49" ~ 4,
-                                                  age_gp == "50-59" ~ 5, age_gp == "60-69" ~ 6, age_gp == "70-79" ~ 7, age_gp == "80-89" ~ 8,
-                                                  age_gp == "90+" ~ 9),
-                               gender_fc = case_when(gender == "female" ~ 1, gender == "male" ~ 0),
-                               outcome = as.factor(recode(outcome, `1` = "fatal", `0` = "resolved")),
-                               deaths = case_when(outcome == "fatal" ~ 1, outcome == "resolved" ~ 0),
-                               source_fc = case_when(source == "travel" ~ 1, source == "community" ~ 2, source == "congregate settings" ~ 3, 
-                                                     source == "close contact" ~ 4, source == "household" ~ 5, source == "no information" ~ 6,
-                                                     source == "healthcare institutions" ~ 7, source == "others" ~ 8)) |>
-                        drop_na()
+                               age_fc = case_when(age_gp == "19-" ~ 1, age_gp == "20-29" ~ 2, age_gp == "30-39" ~ 3, 
+                                                  age_gp == "40-49" ~ 4, age_gp == "50-59" ~ 5, age_gp == "60-69" ~ 6, 
+                                                  age_gp == "70-79" ~ 7, age_gp == "80-89" ~ 8, age_gp == "90+" ~ 9),
+                               gender_fc = case_when(gender == "FEMALE" ~ 1, gender == "MALE" ~ 0, 
+                                                     gender == "TRANS WOMAN" ~ 0, gender == "TRANS MAN" ~ 1),
+                               outcome = as.factor(recode(outcome, `1` = "FATAL", `0` = "RESOLVED")),
+                               deaths = case_when(outcome == "FATAL" ~ 1, outcome == "RESOLVED" ~ 0)) |>
+                       drop_na()
 ```
 
 ```{r echo=FALSE}
@@ -154,38 +147,16 @@ hospitals <- data.frame(hospitals, hospital_district) |>
              group_by(district) |>
              mutate(num_of_hospitals = n()) |>
              ungroup()
-
 hospitals_by_FSA <- left_join(hospitals, postalcode, by = c("district")) |> select(- hospital) |> distinct()
+```
+
+```{r echo=FALSE}
 covid_df <- left_join(covid_df, hospitals_by_FSA, by = "FSA") |> distinct() |>
             mutate(district_fc = case_when(district == "North York" ~ 1,
                                            district == "Toronto and East York" ~ 2,
                                            district == "Scarborough" ~ 3,
-                                           district == "Etobicoke York" ~ 4)) 
-```
-
-```{r echo=FALSE}
-covid_df |> group_by(district, age_gp) |>
-            mutate(mu = sum(deaths)/n()) |> 
-            select(district, mu) |>
-            distinct() |>
-            ggplot(aes(y=mu, x=age_gp)) + 
-                   geom_bar(position="dodge", stat="identity") +
-                   facet_wrap(~district)+
-                   theme_minimal()
-```
-
-```{r echo=TRUE}
-ttc <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/main/Project/data/ttc.csv") |>
-       select(Neighbourhood, TTC.Stops, Traffic.Collisions) |>
-       rename(NBHD = "Neighbourhood", num_stops = "TTC.Stops", collision = "Traffic.Collisions") |>
-       mutate(NBHD = case_when(NBHD == "Mimico" ~ 'Mimico (includes Humber Bay Shores)',
-                               NBHD == "Dovercourt-Wallace Emerson-Juncti" ~ 'Dovercourt-Wallace Emerson-Junction',
-                               NBHD == "Cabbagetown-South St.James Town" ~ 'Cabbagetown-South St. James Town',
-                               NBHD == "North St.James Town" ~ 'North St. James Town',
-                               NBHD == "Briar Hill-Belgravia" ~ 'Briar Hill - Belgravia',
-                               TRUE ~ as.character(NBHD)))
-
-covid_df <- left_join(covid_df, ttc, by = "NBHD") 
+                                           district == "Etobicoke York" ~ 4),
+                   hospitalized_fc = case_when(hospitalized == "Yes" ~ 1, hospitalized == "No" ~ 0),) 
 ```
 
 ```{r echo=FALSE}
@@ -224,46 +195,117 @@ pop_df <- read.csv("https://raw.githubusercontent.com/pquynhvu/STA2201-W2023/mai
                                      TRUE ~ as.character(NBHD))) |>
              ungroup() |>
              distinct()
+covid_df <- left_join(covid_df, pop_df, by = c('NBHD', 'age_gp')) |>
+            group_by(district) |> 
+            mutate(pop_district = sum(pop_age_NBHD), 
+                   prop70plus = mean(plus70_fc == "over 70"),
+                   pop_per_hospital = pop_district/num_of_hospitals) |> 
+            ungroup() |>
+            mutate(hospitalized_fc = case_when(hospitalized == "Yes" ~ 1, hospitalized == "No" ~ 0))
 ```
 
-```{r echo=FALSE}
-covid_pop_df <- left_join(covid_df, pop_df, by = c('NBHD', 'age_gp')) |>
-                group_by(district) |> 
-                mutate(pop_district = sum(pop_age_NBHD), 
-                       prop70plus = mean(plus70_fc == "over 70"),
-                       sum_ttc_stops = sum(num_stops),
-                       collision_per_stop = sum(collision)/sum(num_stops)) |> 
-                ungroup() |>
-                arrange(district_fc)
-```
+## b) Exploratory data analysis (EDA) 
 
 ```{r echo=FALSE}
-tab1 <- as.data.frame(table(covid_pop_df$district)) |> rename(district = Var1)
-tab = c(0, tab1$Freq)
+covid_df |> group_by(district, age_gp) |>
+            mutate(mu = sum(deaths)/n()) |> 
+            select(district, mu) |>
+            distinct() |>
+            ggplot(aes(y=mu, x=age_gp)) + 
+                   geom_bar(position="dodge", stat="identity") +
+                   facet_wrap(~district)+
+                   theme_minimal()
+covid_df |> group_by(gender_fc, outcome) |>
+            mutate(sum_deaths = n()) |> 
+            ggplot(aes(y=sum_deaths, x=gender_fc)) + 
+                   geom_bar(position="dodge", stat="identity") +
+                   facet_wrap(~outcome)+
+                   theme_minimal()
 ```
 
 # Methods
 
 There are two levels. Let i = 1, 2, ..., N denote individuals and j = 1, 2, 3, 4 districts. Deaths in district j follow a Poisson distribution,
 
-$$D_j \sim Poisson(\mu_j P_j)$$
+\begin{centering}
+    $y_{i} | \pi_{i} \sim \operatorname{Bern}\left(\pi_{i}\right)$ \\
+\end{centering}
 
-where $P_j$ is an offset in form of a population in neighborhood j (in thousands), and $\mu_j$ is a death rate due to COVID-19, calculated as the average of the latent death risk variable (or vulnerability) over individuals $N_j$ in neighborhood j:
+\begin{centering}
+    $\eta_{i} = \beta_0+\beta_1 \text{ hospitalized}_{i} + \beta_2 \text{ sex}_{i} + \alpha_{j[i]}^{\text{age}}+\alpha_{k[i]}^{\text{district}}$ \\
+\end{centering}
 
-$$\mu_j = \frac{\sum_{i = 1}^{N_j} \mu_{ij}}{N_j}$$
+\begin{centering}
+    $\pi_i = \operatorname{logit}^{-1}\left(\eta_{i}\right) = \frac{e^{\eta_i}}{1 + e^{\eta_i}}$ \\
+\end{centering}
 
-We model the individual latent death risk with a two-level model:
+\begin{centering}
+    $\alpha_{j}^{\text{age}} \sim \text{N}\left(\alpha_{j-1}^{\text{age}}, \sigma_{\text{age}}^{2}\right), \text { for } j=2, \ldots, 9$ \\
+\end{centering}
 
-$$log(\mu_{ij}) = \alpha_0 + \sum_{k = 1}^K \alpha_k X_{ijk} + \sum_{l = 1}^L \beta_l X_{jl}$$
-where $X_{ij} = {`gender`, `age_gp`, `source`} are individual-level predictors, and $Z_j = {`prop80plus`, `stop_volume`, `collision_per_stop`, `num_of_hospitals`} are district-level predictors.
+\begin{centering}
+    $\alpha_{k}^{\text{district}} \sim \text{N}\left(0, \sigma_{\text{district}}^{2}\right), \text { for } k = 1, \ldots, 4$ \\
+\end{centering}
+
+where $y_i = 1$ if the $i^{th}$ patient died due to COVID-19 and 0 otherwise, and the $\text{ hospitalized}_{i}$ and $\text{ sex}_{i}$ are indicator variables. 
+
+```{r echo=FALSE}
+covid2020 <- covid_df |> filter(year == 2020)
+```
+
+```{r echo=FALSE}
+stan_df2020 <- list(N = nrow(covid2020),
+                    D = length(unique(covid2020$district)),
+                    A = length(unique(covid2020$age_gp)),
+                    K = 3,
+                    hospitalized = covid2020$hospitalized_fc,
+                    sex = covid2020$gender_fc,
+                    age = covid2020$age_fc,
+                    district = covid2020$district_fc,
+                    y = covid2020$deaths)
+```
+
+```{r echo=FALSE}
+mod1 <- stan(data = stan_df2020, file = here("C:/GitHub/STA2201-W2023/Project/code/hierarchical_covid.stan"),
+             chain = 1, iter = 500)
+summary(mod1)[["summary"]][c(paste0("beta[",1:3, "]"), paste0("alpha_age[",1:9, "]"), paste0("alpha_district[",1:4, "]")),]
+```
 
 ```{r}
-dd <- covid_pop_df |> select(id, district, mu_j) |>
-                      mutate(district_fc = case_when(district == "North York" ~ '1',
-                                                     district == "Toronto and East York" ~ '2',
-                                                     district == "Etobicoke York" ~ '3',
-                                                     district == "Scarborough" ~ '4')) 
+alpha_district <- rstan::extract(mod1)[["alpha_district"]] |> as.data.frame() |> 
+                  rename("North York" = V1, "Toronto and East York" = V2, "Scarborough" = V3, "Etobicoke York" = V4) |>
+                  melt() |>
+                  rename(district = variable)
+alpha_district |> ggplot(aes(x = district, y = value, fill=district)) + 
+                    geom_boxplot() + 
+                    labs(title = "Estimated age effects by age group",
+                         x = "Age groups",
+                         y = expression(alpha[age]),
+                         fill = "Age groups") +
+                    theme_minimal()
+```
 
+```{r}
+alpha_age <- rstan::extract(mod1)[["alpha_age"]] |> as.data.frame() |> 
+                  melt() |>
+                  rename(age = variable)
+alpha_age |> ggplot(aes(x = age, y = value, fill=age)) + 
+                    geom_boxplot() + 
+                    labs(title = "Estimated age effects by age group",
+                         x = "Age groups",
+                         y = expression(alpha[age]),
+                         fill = "Age groups") +
+                    theme_minimal()
+```
+
+```{r echo=FALSE}
+p_hat <- function(y){
+  exp(y)/(1 + exp(y))
+}
+```
+
+```{r}
+mu <- rstan::extract(mod1)[["mu"]] |> as.data.frame()
 ```
 
 # Results
@@ -271,3 +313,5 @@ dd <- covid_pop_df |> select(id, district, mu_j) |>
 # Discussion
 
 # References
+
+
